@@ -8,6 +8,10 @@ import MyPickups from './pages/MyPickups';
 import MySales from './pages/MySales';
 import CollectorRegister from './pages/CollectorRegister';
 import CollectorDashboard from './pages/CollectorDashboard';
+import CollectorPickupRequests from './pages/CollectorPickupRequests';
+import CollectorMyPickups from './pages/CollectorMyPickups';
+import CollectorTransactions from './pages/CollectorTransactions';
+import CollectorStoreProfile from './pages/CollectorStoreProfile';
 import { ProtectedRoute } from './components/ProtectedRoute';
 
 function App() {
@@ -61,6 +65,38 @@ function App() {
         element={
           <ProtectedRoute requiredRole="collector">
             <CollectorDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/collector/pickup-requests"
+        element={
+          <ProtectedRoute requiredRole="collector">
+            <CollectorPickupRequests />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/collector/my-pickups"
+        element={
+          <ProtectedRoute requiredRole="collector">
+            <CollectorMyPickups />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/collector/transactions"
+        element={
+          <ProtectedRoute requiredRole="collector">
+            <CollectorTransactions />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/collector/store-profile"
+        element={
+          <ProtectedRoute requiredRole="collector">
+            <CollectorStoreProfile />
           </ProtectedRoute>
         }
       />

@@ -105,17 +105,61 @@ interface AuthContextValue {
   acceptPickupRequest: (requestId: string, collectorName: string) => void;
   rejectPickupRequest: (requestId: string) => void;
   updatePickupStatus: (requestId: string, status: PickupStatus, paymentMethod?: string) => void;
+  updatePickupItems: (requestId: string, updatedItems: PickupItem[]) => void;
 }
 
 // ─── Storage Keys ────────────────────────────────────────────────────────────
 
 const CURRENT_USER_KEY = 'scrapnow_user';
 const ALL_USERS_KEY = 'scrapnow_users';
-const PICKUPS_KEY = 'scrapnow_pickups';
+const PICKUPS_KEY = 'scrapnow_pickups_v2'; // Key updated for fresh demo pickups
 
-// ─── Initial Mock Pickups for Shared State ─────────────────────────────────
+// ─── Rich Initial Mock Pickups for Demo ─────────────────────────────────────
 
 const INITIAL_MOCK_PICKUPS: PickupRequest[] = [
+  {
+    id: 'SN-508210',
+    userId: 'demo-user-1',
+    userName: 'Shubham Sutar',
+    userPhone: '9876543210',
+    collectorId: 'col-1',
+    collectorName: 'Raj Scrap Center',
+    collectorRating: 4.8,
+    collectorDistance: '1.2 km away',
+    collectorAddress: 'Kothrud, Pune',
+    pickupAddress: 'Flat 402, Mayur Colony, Kothrud, Pune, Maharashtra - 411038',
+    timeSlot: 'Today, 2:30 PM',
+    estimatedValue: 417,
+    status: 'Accepted',
+    createdAt: new Date().toISOString(),
+    items: [
+      { id: 'newspaper', name: 'Newspaper', category: 'Paper', weightKg: 12, pricePerKg: 11, amount: 132 },
+      { id: 'pet-bottles', name: 'PET Water Bottles', category: 'Plastic', weightKg: 6, pricePerKg: 26, amount: 156 },
+      { id: 'hard-plastic', name: 'Hard Plastic Buckets', category: 'Plastic', weightKg: 4, pricePerKg: 2, amount: 8 },
+      { id: 'iron', name: 'Iron Scrap', category: 'Metal', weightKg: 5, pricePerKg: 24, amount: 120 },
+    ],
+  },
+  {
+    id: 'SN-509340',
+    userId: 'cust-104',
+    userName: 'Ananya Deshmukh',
+    userPhone: '9823456789',
+    collectorId: 'col-1',
+    collectorName: 'Raj Scrap Center',
+    collectorRating: 4.8,
+    collectorDistance: '1.8 km away',
+    collectorAddress: 'Erandwane, Pune',
+    pickupAddress: 'Bunglow 14, Prabhat Road, Erandwane, Pune',
+    timeSlot: 'Today, 5:00 PM',
+    estimatedValue: 1530,
+    status: 'On the Way',
+    createdAt: new Date().toISOString(),
+    items: [
+      { id: 'copper', name: 'Copper Cable Wire', category: 'Metal', weightKg: 2, pricePerKg: 620, amount: 1240 },
+      { id: 'books', name: 'Books & Notebooks', category: 'Paper', weightKg: 15, pricePerKg: 10, amount: 150 },
+      { id: 'aluminium', name: 'Aluminium Cans', category: 'Metal', weightKg: 1, pricePerKg: 140, amount: 140 },
+    ],
+  },
   {
     id: 'SN-1024',
     userId: 'cust-101',
@@ -149,51 +193,12 @@ const INITIAL_MOCK_PICKUPS: PickupRequest[] = [
     collectorAddress: 'Baner, Pune',
     pickupAddress: 'High Street, Baner, Pune',
     timeSlot: 'Tomorrow, 10:30 AM',
-    estimatedValue: 450,
+    estimatedValue: 443,
     status: 'Pending Pickup',
     createdAt: new Date().toISOString(),
     items: [
       { id: 'aluminium', name: 'Aluminium', category: 'Metal', weightKg: 2, pricePerKg: 150, amount: 300 },
       { id: 'newspaper', name: 'Newspaper', category: 'Paper', weightKg: 13, pricePerKg: 11, amount: 143 },
-    ],
-  },
-  {
-    id: 'SN-1026',
-    userId: 'cust-103',
-    userName: 'Amit Patil',
-    userPhone: '9765432109',
-    collectorId: 'col-1',
-    collectorName: 'Raj Scrap Center',
-    collectorRating: 4.8,
-    collectorDistance: '0.8 km away',
-    collectorAddress: 'Kothrud, Pune',
-    pickupAddress: 'Paud Road, Kothrud, Pune',
-    timeSlot: 'Today, 6:00 PM',
-    estimatedValue: 620,
-    status: 'Pending Pickup',
-    createdAt: new Date().toISOString(),
-    items: [
-      { id: 'copper', name: 'Copper Wire', category: 'Metal', weightKg: 1, pricePerKg: 620, amount: 620 },
-    ],
-  },
-  {
-    id: 'SN-402910',
-    userId: 'demo-user-1',
-    userName: 'Shubham Sutar',
-    userPhone: '9876543210',
-    collectorId: 'col-1',
-    collectorName: 'Raj Scrap Center',
-    collectorRating: 4.8,
-    collectorDistance: '1.2 km away',
-    collectorAddress: 'Kothrud, Pune',
-    pickupAddress: 'Paud Road, Kothrud, Pune, Maharashtra - 411038',
-    timeSlot: 'Tomorrow • 10:30 AM',
-    estimatedValue: 420,
-    status: 'Accepted',
-    createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
-    items: [
-      { id: 'newspaper', name: 'Newspaper', category: 'Paper', weightKg: 10, pricePerKg: 26, amount: 260 },
-      { id: 'plastic-bottles', name: 'PET Water Bottles', category: 'Plastic', weightKg: 5, pricePerKg: 32, amount: 160 },
     ],
   },
   {
@@ -496,6 +501,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     []
   );
 
+  const updatePickupItems = useCallback((requestId: string, updatedItems: PickupItem[]) => {
+    setPickups((prev) =>
+      prev.map((req) => {
+        if (req.id === requestId) {
+          const recalculatedTotal = updatedItems.reduce(
+            (sum, item) => sum + item.pricePerKg * item.weightKg,
+            0
+          );
+          return {
+            ...req,
+            items: updatedItems,
+            estimatedValue: Math.round(recalculatedTotal),
+          };
+        }
+        return req;
+      })
+    );
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{
@@ -516,6 +540,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         acceptPickupRequest,
         rejectPickupRequest,
         updatePickupStatus,
+        updatePickupItems,
       }}
     >
       {children}

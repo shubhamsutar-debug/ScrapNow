@@ -6,11 +6,11 @@ import { useCity } from '../context/CityContext';
 import CitySelector from './CitySelector';
 
 const collectorNavLinks = [
-  { label: 'Dashboard', path: '/collector/dashboard' },
-  { label: 'Pickup Requests', path: '/collector/requests' },
-  { label: 'My Pickups', path: '/collector/my-pickups' },
-  { label: 'Earnings', path: '/collector/earnings' },
-  { label: 'Store Profile', path: '/collector/profile' },
+  { label: 'Dashboard',       path: '/collector/dashboard' },
+  { label: 'Pickup Requests', path: '/collector/pickup-requests' },
+  { label: 'My Pickups',       path: '/collector/my-pickups' },
+  { label: 'Transactions',     path: '/collector/transactions' },
+  { label: 'Store Profile',   path: '/collector/store-profile' },
 ];
 
 export default function CollectorNavbar() {
@@ -54,7 +54,7 @@ export default function CollectorNavbar() {
                 e.preventDefault();
                 navigate('/collector/dashboard');
               }}
-              className="flex items-center"
+              className="flex items-center cursor-pointer"
             >
               <img src={logoImg} alt="ScrapNow Partner Logo" className="w-8 h-8 mr-2 object-contain" />
               <span className="text-xl font-bold text-brand-text tracking-tight">
@@ -100,26 +100,43 @@ export default function CollectorNavbar() {
                 </div>
                 <div className="text-left min-w-0 max-w-[120px]">
                   <p className="text-xs font-bold text-brand-text truncate">{businessName}</p>
-                  <span className="text-[10px] text-emerald-700 font-extrabold block">Collector</span>
+                  <span className="text-[10px] text-emerald-700 font-extrabold block">Collector Partner</span>
                 </div>
                 <svg className="w-4 h-4 text-brand-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
               </button>
 
-              {/* Dropdown */}
+              {/* Functional Collector Profile Dropdown */}
               {isUserMenuOpen && (
                 <div className="absolute right-0 top-full mt-2 w-56 bg-brand-card border border-brand-border rounded-2xl shadow-xl py-2 animate-[slideUp_150ms_ease-out] z-50">
-                  <div className="px-4 py-2.5 border-b border-brand-border">
+                  <div className="px-4 py-3 border-b border-brand-border">
                     <p className="text-sm font-bold text-brand-text truncate">{businessName}</p>
                     <p className="text-xs text-brand-text-secondary">+91 {user?.phone}</p>
                   </div>
-                  <button
-                    onClick={handleLogout}
-                    className="w-full text-left px-4 py-2.5 text-xs font-semibold text-red-600 hover:bg-red-50 transition flex items-center gap-2 cursor-pointer"
-                  >
-                    <span>🚪</span> Logout
-                  </button>
+
+                  <div className="py-1">
+                    <button
+                      onClick={() => { setIsUserMenuOpen(false); navigate('/collector/store-profile'); }}
+                      className="w-full text-left px-4 py-2 text-xs font-semibold text-brand-text hover:bg-brand-bg transition flex items-center gap-2 cursor-pointer"
+                    >
+                      <span>👤</span> View Profile
+                    </button>
+
+                    <button
+                      onClick={() => { setIsUserMenuOpen(false); navigate('/collector/store-profile'); }}
+                      className="w-full text-left px-4 py-2 text-xs font-semibold text-brand-text hover:bg-brand-bg transition flex items-center gap-2 cursor-pointer"
+                    >
+                      <span>🏪</span> Store Profile
+                    </button>
+
+                    <button
+                      onClick={handleLogout}
+                      className="w-full text-left px-4 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 transition flex items-center gap-2 cursor-pointer border-t border-brand-border mt-1 pt-2"
+                    >
+                      <span>🚪</span> Logout
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -129,7 +146,7 @@ export default function CollectorNavbar() {
           <div className="flex items-center md:hidden">
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="text-brand-text-secondary hover:text-brand-primary"
+              className="text-brand-text-secondary hover:text-brand-primary p-1"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
@@ -146,14 +163,14 @@ export default function CollectorNavbar() {
             <button
               key={path}
               onClick={() => { setIsMobileMenuOpen(false); navigate(path); }}
-              className="block w-full text-left py-2 text-sm font-semibold text-brand-text"
+              className="block w-full text-left py-2 text-sm font-semibold text-brand-text hover:text-brand-primary"
             >
               {label}
             </button>
           ))}
           <button
             onClick={handleLogout}
-            className="w-full text-center py-2 rounded-xl bg-red-50 text-red-600 font-bold text-xs"
+            className="w-full text-center py-2.5 rounded-xl bg-red-50 text-red-600 font-bold text-xs border border-red-200 mt-2"
           >
             Logout
           </button>
