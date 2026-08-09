@@ -543,55 +543,55 @@ export default function SellScrap() {
                   key={item.id || idx}
                   className="bg-brand-bg/60 border border-brand-border rounded-2xl p-4 space-y-3 shadow-2xs"
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      {item.image ? (
-                        <img
-                          src={item.image}
-                          alt={item.name}
-                          className="w-12 h-12 object-cover rounded-xl border border-brand-border shadow-2xs"
-                        />
-                      ) : (
-                        <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center text-2xl shadow-2xs border border-brand-border">
-                          {item.icon}
-                        </div>
-                      )}
-
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-extrabold text-brand-text text-sm sm:text-base">{item.name}</h4>
-                          <span
-                            className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full ${
-                              item.detectionSource === 'user_corrected'
-                                ? 'bg-blue-100 text-blue-900 border border-blue-300'
-                                : 'bg-emerald-100 text-emerald-900'
-                            }`}
-                          >
-                            {item.detectionSource === 'user_corrected' ? '✓ Corrected' : '✦ AI Detected'}
-                          </span>
-                        </div>
-                        <p className="text-xs text-brand-text-secondary mt-0.5">
-                          <span className="font-semibold">{item.category}</span> • Rate: <strong className="text-brand-primary">₹{item.pricePerKg}/{item.unit}</strong>
-                        </p>
+                  <div className="flex items-start gap-3">
+                    {item.image ? (
+                      <img
+                        src={item.image}
+                        alt={item.name}
+                        className="w-12 h-12 object-cover rounded-xl border border-brand-border shadow-2xs flex-shrink-0"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center text-2xl shadow-2xs border border-brand-border flex-shrink-0">
+                        {item.icon}
                       </div>
-                    </div>
+                    )}
 
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => handleOpenEditModal(idx)}
-                        className="py-1.5 px-3 rounded-lg border border-brand-primary text-brand-primary font-bold text-xs hover:bg-brand-light transition cursor-pointer"
-                      >
-                        ✏️ Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveDetectedItem(idx)}
-                        className="py-1.5 px-2.5 rounded-lg border border-red-200 text-red-600 font-bold text-xs hover:bg-red-50 transition cursor-pointer"
-                        title="Delete Item"
-                      >
-                        🗑️ Delete
-                      </button>
+                    <div className="flex-1 min-w-0">
+                      {/* Name row */}
+                      <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
+                        <h4 className="font-extrabold text-brand-text text-sm sm:text-base leading-tight">{item.name}</h4>
+                        <span
+                          className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full whitespace-nowrap ${
+                            item.detectionSource === 'user_corrected'
+                              ? 'bg-blue-100 text-blue-900 border border-blue-300'
+                              : 'bg-emerald-100 text-emerald-900'
+                          }`}
+                        >
+                          {item.detectionSource === 'user_corrected' ? '✓ Corrected' : '✦ AI Detected'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-brand-text-secondary">
+                        <span className="font-semibold">{item.category}</span> • Rate: <strong className="text-brand-primary">₹{item.pricePerKg}/{item.unit}</strong>
+                      </p>
+
+                      {/* Edit / Delete buttons below name on mobile */}
+                      <div className="flex items-center gap-2 mt-2">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditModal(idx)}
+                          className="py-1.5 px-3 rounded-lg border border-brand-primary text-brand-primary font-bold text-xs hover:bg-brand-light transition cursor-pointer"
+                        >
+                          ✏️ Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveDetectedItem(idx)}
+                          className="py-1.5 px-2.5 rounded-lg border border-red-200 text-red-600 font-bold text-xs hover:bg-red-50 transition cursor-pointer"
+                          title="Delete Item"
+                        >
+                          🗑️ Delete
+                        </button>
+                      </div>
                     </div>
                   </div>
 
