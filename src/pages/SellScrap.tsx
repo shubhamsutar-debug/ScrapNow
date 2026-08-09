@@ -1,202 +1,189 @@
-import React, { useState, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import AuthModal from '../components/AuthModal';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, type PickupItem } from '../context/AuthContext';
 import { useCity } from '../context/CityContext';
 import {
   analyzeScrapImageWithOpenRouter,
   fileToBase64,
   type AIDetectedItem,
 } from '../services/openRouterService';
+import { getScrapItemsForCity } from '../data/scrapItems';
 
 export default function SellScrap() {
   const navigate = useNavigate();
-  const { user, openAuthModal } = useAuth();
+  const { user, addPickupRequest } = useAuth();
   const { selectedCity } = useCity();
 
-  // Current Step: 1 = Upload, 2 = Detection Result, 3 = Weight Input, 4 = Estimated Value, 5 = Collector, 6 = Pickup Confirmation
-  const [currentStep, setCurrentStep] = useState<number>(1);
+  // Current Step state (1: Upload, 2: Review Items, 3: Address & Time, 4: Confirmed Receipt)
+  const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4>(1);
 
-  // Step 1 State
+  // File Upload State
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Step 2 & 3 State
+  // Detected Items State
   const [detectedItems, setDetectedItems] = useState<AIDetectedItem[]>([]);
 
-  // Step 5 State (Collector)
-  const [selectedCollector, setSelectedCollector] = useState<{
-    id: string;
-    name: string;
-    rating: number;
-    distance: string;
-    address: string;
-    freePickup: boolean;
-  }>({
-    id: 'col-1',
-    name: 'Raj Scrap Center',
-    rating: 4.8,
-    distance: '1.2 km',
-    address: `${selectedCity}, Maharashtra`,
-    freePickup: true,
-  });
+  // Pickup Details State
+  const [pickupAddress, setPickupAddress] = useState(
+    'Flat 402, Mayur Colony, Kothrud, Pune, Maharashtra - 411038'
+  );
+  const [timeSlot, setTimeSlot] = useState('Today, 4:00 PM');
+  const [isConfirmed, setIsConfirmed] = useState(false);
+  const [confirmedRequestId, setConfirmedRequestId] = useState<string | null>(null);
 
-  // Step 6 State (Confirmation)
-  const [requestId, setRequestId] = useState<string>('');
-  const [isConfirmed, setIsConfirmed] = useState<boolean>(false);
+  // Handle file drop / upload
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await processImageFile(file);
+  };
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    await processImageFile(file);
+  };
 
-  // ─── Step 1 Handlers: File Select & OpenRouter AI Analysis ───────────────
-
-  const handleImageProcess = async (file: File) => {
+  // Image Processing & AI Detection
+  const processImageFile = async (file: File) => {
+    setErrorMessage(null);
+    setIsAnalyzing(true);
     try {
-      setErrorMessage(null);
       const base64 = await fileToBase64(file);
       setUploadedImage(base64);
-      setIsAnalyzing(true);
 
-      // Call OpenRouter API Vision analysis
-      const result = await analyzeScrapImageWithOpenRouter(base64, selectedCity);
-
-      setIsAnalyzing(false);
-
-      if (!result.items || result.items.length === 0) {
-        setErrorMessage("We couldn't analyze that image. No recognizable scrap items were detected.");
+      const aiResult = await analyzeScrapImageWithOpenRouter(base64, selectedCity);
+      if (aiResult.items.length === 0) {
+        setErrorMessage("We couldn't identify scrap items in this image. Try uploading a clearer photo.");
+        setIsAnalyzing(false);
         return;
       }
 
-      setDetectedItems(result.items);
-      setCurrentStep(2); // Advance to Step 2: Detection Result
-    } catch (err: any) {
-      console.error(err);
+      setDetectedItems(aiResult.items);
       setIsAnalyzing(false);
-      if (err?.message === 'IMAGE_TOO_LARGE') {
+      setCurrentStep(2);
+    } catch (err: any) {
+      setIsAnalyzing(false);
+      if (err.message === 'IMAGE_TOO_LARGE') {
         setErrorMessage('Image size exceeds 10MB limit. Please upload a smaller photo.');
       } else {
-        setErrorMessage("We couldn't analyze that image. Please try another clear photo.");
+        setErrorMessage('Failed to connect to AI scanner. Please try again.');
       }
-    }
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      handleImageProcess(e.target.files[0]);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleImageProcess(e.dataTransfer.files[0]);
     }
   };
 
   const handleResetUpload = () => {
     setUploadedImage(null);
     setDetectedItems([]);
-    setIsAnalyzing(false);
     setErrorMessage(null);
+    setIsAnalyzing(false);
     setCurrentStep(1);
   };
 
-  // ─── Step 3 Weight Input Handler ─────────────────────────────────────────
-
-  const handleWeightChange = (id: string, valStr: string) => {
-    const num = parseFloat(valStr);
-    const weight = isNaN(num) || num < 0 ? 0 : num;
-    setDetectedItems((prev) =>
-      prev.map((item) => (item.matchedScrapId === id ? { ...item, weightKg: weight } : item))
-    );
+  // Item modifications
+  const handleUpdateItemWeight = (index: number, newWeight: number) => {
+    setDetectedItems((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], weightKg: Math.max(1, newWeight) };
+      return updated;
+    });
   };
 
-  // ─── Total Calculation for Step 4 & 6 ───────────────────────────────────
+  const handleRemoveDetectedItem = (index: number) => {
+    setDetectedItems((prev) => prev.filter((_, i) => i !== index));
+  };
 
+  const handleAddManualItem = () => {
+    const cityItems = getScrapItemsForCity(selectedCity);
+    const item = cityItems[0];
+    const newItem: AIDetectedItem = {
+      name: item.name,
+      category: item.category as any,
+      confidence: 1.0,
+      pricePerKg: item.price,
+      unit: item.unit,
+      weightKg: 5,
+      icon: '📦',
+      matchedScrapId: item.id,
+    };
+    setDetectedItems((prev) => [...prev, newItem]);
+  };
+
+  // Calculations
   const totalEstimatedValue = detectedItems.reduce(
-    (acc, item) => acc + item.pricePerKg * item.weightKg,
+    (sum, item) => sum + item.pricePerKg * item.weightKg,
     0
   );
 
-  // ─── Demo Collectors List for Step 5 ────────────────────────────────────
-
-  const nearbyCollectors = [
-    {
-      id: 'col-1',
-      name: 'Raj Scrap Center',
-      rating: 4.8,
-      distance: '1.2 km',
-      address: `Kothrud, ${selectedCity}`,
-      freePickup: true,
-    },
-    {
-      id: 'col-2',
-      name: 'GreenCycle Scrap Solutions',
-      rating: 4.9,
-      distance: '2.1 km',
-      address: `Viman Nagar, ${selectedCity}`,
-      freePickup: true,
-    },
-    {
-      id: 'col-3',
-      name: 'EcoScrap Traders',
-      rating: 4.6,
-      distance: '3.4 km',
-      address: `Hadapsar, ${selectedCity}`,
-      freePickup: true,
-    },
-  ];
-
+  // Submit Request to Database
   const handleConfirmPickup = () => {
-    if (!user) {
-      openAuthModal('sell-scrap');
+    if (detectedItems.length === 0) {
+      alert('Please keep at least one item to request a pickup.');
       return;
     }
-    const generatedId = `SN-${Math.floor(100000 + Math.random() * 900000)}`;
-    setRequestId(generatedId);
+
+    const itemsForPayload: PickupItem[] = detectedItems.map((item, i) => ({
+      id: item.matchedScrapId || `item-${i}`,
+      name: item.name,
+      category: item.category,
+      weightKg: item.weightKg,
+      pricePerKg: item.pricePerKg,
+      amount: Math.round(item.weightKg * item.pricePerKg),
+    }));
+
+    const newReq = addPickupRequest({
+      userId: user?.userId || 'guest-user',
+      userName: user?.name || 'Shubham Sutar',
+      userPhone: user?.phone || '9876543210',
+      collectorId: '',
+      collectorName: 'Not assigned yet',
+      collectorRating: 4.8,
+      collectorDistance: 'Nearby',
+      collectorAddress: selectedCity,
+      pickupAddress: pickupAddress,
+      timeSlot: timeSlot,
+      estimatedValue: Math.round(totalEstimatedValue),
+      status: 'Pending Pickup',
+      items: itemsForPayload,
+    });
+
+    setConfirmedRequestId(newReq.id);
     setIsConfirmed(true);
+    setCurrentStep(4);
   };
 
   return (
-    <div className="min-h-screen bg-brand-bg flex flex-col justify-between">
+    <div className="min-h-screen bg-brand-bg flex flex-col justify-between font-sans">
       <Navbar />
+      <AuthModal />
 
-      {/* Stepper Header Bar */}
-      <div className="w-full bg-brand-card border-b border-brand-border py-3.5 px-4 sm:px-8 shadow-2xs sticky top-16 z-30">
-        <div className="max-w-xl mx-auto flex items-center justify-between relative">
-          {/* Stepper Line */}
-          <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-brand-border -translate-y-1/2 z-0" />
-          <div
-            className="absolute top-1/2 left-0 h-0.5 bg-brand-primary -translate-y-1/2 transition-all duration-300 z-0"
-            style={{ width: `${((Math.min(currentStep, 5) - 1) / 4) * 100}%` }}
-          />
-
+      {/* Progressive Disclosure Stepper Bar */}
+      <div className="sticky top-16 z-40 bg-brand-card/90 backdrop-blur-md border-b border-brand-border py-3">
+        <div className="max-w-xl mx-auto px-4 flex items-center justify-between">
           {[
-            { id: 1, label: 'Upload' },
-            { id: 2, label: 'Review' },
-            { id: 3, label: 'Value' },
-            { id: 4, label: 'Collector' },
-            { id: 5, label: 'Pickup' },
+            { num: 1, label: 'Add Scrap' },
+            { num: 2, label: 'Detected Items' },
+            { num: 3, label: 'Address & Schedule' },
+            { num: 4, label: 'Request Pickup' },
           ].map((s) => {
-            const stepNum = s.id;
-            const isCurrent = currentStep === stepNum || (currentStep === 6 && stepNum === 5);
+            const stepNum = s.num as 1 | 2 | 3 | 4;
             const isCompleted = currentStep > stepNum;
+            const isCurrent = currentStep === stepNum;
 
             return (
-              <div
-                key={s.id}
-                onClick={() => {
-                  if (isCompleted && !isAnalyzing) setCurrentStep(stepNum);
-                }}
-                className="relative z-10 flex flex-col items-center cursor-pointer"
-              >
+              <div key={s.num} className="flex flex-col items-center flex-1">
                 <div
-                  className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs transition-all ${
+                  className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-extrabold transition-all ${
                     isCompleted
-                      ? 'bg-brand-primary text-white shadow-2xs'
+                      ? 'bg-brand-primary text-white'
                       : isCurrent
                       ? 'bg-brand-primary text-white ring-4 ring-brand-light shadow-xs scale-105'
                       : 'bg-brand-card border border-brand-border text-brand-text-secondary'
@@ -221,27 +208,21 @@ export default function SellScrap() {
         </div>
       </div>
 
-      {/* Main Content Body */}
       <main className="flex-1 max-w-xl mx-auto w-full px-4 sm:px-6 py-8 space-y-6">
-
-        {/* Hero Section */}
-        <div className="text-center space-y-2">
+        <div className="text-center space-y-1">
           <h1 className="text-2xl sm:text-3xl font-extrabold text-brand-text tracking-tight">
-            Sell Your Scrap
+            Sell Your Scrap ♻️
           </h1>
           <p className="text-brand-text-secondary text-xs sm:text-sm">
-            Take a photo of your scrap and let AI identify it.
+            AI material detection & doorstep pickup in {selectedCity}
           </p>
         </div>
 
-        {/* ═════════════════════════════════════════════════════════════════════
-           STEP 1 — UPLOAD SCRAP (Initial state, single clean card)
-           ═════════════════════════════════════════════════════════════════════ */}
+        {/* STEP 1 — UPLOAD SCRAP */}
         {currentStep === 1 && (
           <div className="animate-[fadeIn_200ms_ease-out]">
             {!isAnalyzing ? (
               <div className="space-y-4">
-                {/* Upload Card */}
                 <div
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={handleDrop}
@@ -252,30 +233,28 @@ export default function SellScrap() {
                   </div>
 
                   <div className="space-y-1">
-                    <h3 className="text-lg sm:text-xl font-bold text-brand-text">Upload your scrap</h3>
+                    <h3 className="text-lg sm:text-xl font-bold text-brand-text">Upload clear images of your scrap</h3>
                     <p className="text-brand-text-secondary text-xs">
-                      Take a clear photo or select an image from your device.
+                      Take a photo or upload from device for AI material detection.
                     </p>
                   </div>
 
-                  {/* Buttons */}
                   <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
                     <button
                       onClick={() => cameraInputRef.current?.click()}
                       className="w-full sm:w-auto py-3 px-6 rounded-xl bg-brand-primary text-white font-bold text-sm hover:bg-brand-dark transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer"
                     >
-                      <span>Take Photo</span>
+                      <span>📷 Take Photo</span>
                     </button>
 
                     <button
                       onClick={() => fileInputRef.current?.click()}
                       className="w-full sm:w-auto py-3 px-6 rounded-xl bg-brand-card border border-brand-border hover:border-brand-primary text-brand-text font-bold text-sm hover:bg-brand-bg transition-all shadow-2xs flex items-center justify-center gap-2 cursor-pointer"
                     >
-                      <span>Upload Image</span>
+                      <span>📁 Upload Image</span>
                     </button>
                   </div>
 
-                  {/* Hidden inputs */}
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -293,14 +272,13 @@ export default function SellScrap() {
                   />
                 </div>
 
-                {/* Error Banner state */}
                 {errorMessage && (
                   <div className="bg-brand-card border border-red-200 rounded-2xl p-5 text-center space-y-3 animate-[fadeIn_200ms_ease-out]">
                     <div className="w-10 h-10 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto text-lg font-bold">
                       ⚠️
                     </div>
                     <div>
-                      <h4 className="font-bold text-brand-text text-sm">We couldn't analyze that image</h4>
+                      <h4 className="font-bold text-brand-text text-sm">Image Scanner Alert</h4>
                       <p className="text-brand-text-secondary text-xs mt-1">{errorMessage}</p>
                     </div>
                     <button
@@ -331,7 +309,7 @@ export default function SellScrap() {
                     <h3 className="text-lg font-bold text-brand-text">Analyzing your scrap...</h3>
                   </div>
                   <p className="text-brand-text-secondary text-xs">
-                    ScrapNow AI is identifying your items
+                    ScrapNow AI is identifying your recyclable materials
                   </p>
                 </div>
               </div>
@@ -339,345 +317,229 @@ export default function SellScrap() {
           </div>
         )}
 
-        {/* ═════════════════════════════════════════════════════════════════════
-           STEP 2 — AI DETECTION RESULT
-           ═════════════════════════════════════════════════════════════════════ */}
+        {/* STEP 2 — REVIEW DETECTED ITEMS */}
         {currentStep === 2 && (
           <div className="bg-brand-card border border-brand-border rounded-3xl p-6 sm:p-8 shadow-xs space-y-6 animate-[fadeIn_200ms_ease-out]">
-            
             <div className="flex items-center justify-between pb-3 border-b border-brand-border">
-              <h3 className="text-lg font-bold text-brand-text">We found your scrap ♻️</h3>
+              <div>
+                <h3 className="text-lg font-bold text-brand-text">AI Identified Items ♻️</h3>
+                <p className="text-xs text-brand-text-secondary mt-0.5">Verify and edit estimated weights</p>
+              </div>
               <span className="text-xs font-bold text-brand-primary bg-brand-light px-2.5 py-1 rounded-full border border-brand-primary/20">
-                AI Verified
+                ✦ Vision AI
               </span>
             </div>
 
-            {/* Uploaded Thumbnail */}
-            {uploadedImage && (
-              <div className="flex items-center gap-3 p-3 bg-brand-bg rounded-2xl border border-brand-border">
-                <img src={uploadedImage} alt="Uploaded thumbnail" className="w-16 h-16 rounded-xl object-cover border border-brand-border" />
-                <span className="text-xs font-bold text-brand-text-secondary">📷 uploaded image</span>
-              </div>
-            )}
-
-            {/* AI Detected Items List */}
-            <div className="space-y-2">
-              <h4 className="text-xs font-bold text-brand-text-secondary uppercase tracking-wider">AI detected</h4>
-              {detectedItems.map((item) => (
+            <div className="space-y-3">
+              {detectedItems.map((item, idx) => (
                 <div
-                  key={item.matchedScrapId}
-                  className="p-3.5 rounded-2xl border border-brand-border bg-white flex items-center justify-between"
+                  key={idx}
+                  className="bg-brand-bg/60 border border-brand-border rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                 >
                   <div className="flex items-center gap-3">
-                    <span className="text-2xl">{item.icon}</span>
+                    <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-xl shadow-2xs border border-brand-border">
+                      {item.icon}
+                    </div>
                     <div>
-                      <h4 className="font-bold text-brand-text text-sm sm:text-base">{item.name}</h4>
-                      <span className="text-[10px] text-brand-text-secondary font-medium">{item.category}</span>
+                      <h4 className="font-bold text-brand-text text-sm">{item.name}</h4>
+                      <p className="text-xs text-brand-text-secondary">
+                        {item.category} • ₹{item.pricePerKg}/{item.unit}
+                      </p>
                     </div>
                   </div>
 
-                  <span className="text-xs font-extrabold text-brand-primary bg-brand-light px-2.5 py-1 rounded-full border border-brand-primary/20">
-                    {Math.round(item.confidence * 100)}%
-                  </span>
+                  <div className="flex items-center justify-between sm:justify-end gap-4 border-t sm:border-t-0 pt-2 sm:pt-0">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateItemWeight(idx, item.weightKg - 1)}
+                        className="w-7 h-7 rounded-lg bg-brand-card border border-brand-border font-bold text-brand-text hover:bg-brand-bg flex items-center justify-center cursor-pointer"
+                      >
+                        -
+                      </button>
+                      <span className="text-xs font-extrabold text-brand-text w-12 text-center">
+                        {item.weightKg} kg
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateItemWeight(idx, item.weightKg + 1)}
+                        className="w-7 h-7 rounded-lg bg-brand-card border border-brand-border font-bold text-brand-text hover:bg-brand-bg flex items-center justify-center cursor-pointer"
+                      >
+                        +
+                      </button>
+                    </div>
+
+                    <span className="font-extrabold text-brand-primary text-sm min-w-[60px] text-right">
+                      ₹{item.weightKg * item.pricePerKg}
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveDetectedItem(idx)}
+                      className="text-red-500 hover:text-red-700 font-bold text-xs p-1 cursor-pointer"
+                      title="Remove Item"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 </div>
               ))}
+
+              <button
+                type="button"
+                onClick={handleAddManualItem}
+                className="w-full py-2.5 rounded-xl border border-dashed border-brand-primary text-brand-primary font-bold text-xs hover:bg-brand-light/50 transition cursor-pointer"
+              >
+                + Add Another Scrap Item
+              </button>
             </div>
 
-            {/* Action Buttons */}
-            <div className="pt-2 flex flex-col sm:flex-row items-center gap-3">
-              <button
-                onClick={() => setCurrentStep(3)}
-                className="w-full sm:flex-1 py-3.5 rounded-xl bg-brand-primary text-white font-bold text-sm hover:bg-brand-dark transition-all shadow-xs cursor-pointer"
-              >
-                Looks Correct ✓
-              </button>
+            <div className="flex items-center justify-between bg-brand-light/60 p-4 rounded-2xl border border-brand-primary/20">
+              <span className="text-xs font-bold text-brand-dark uppercase tracking-wider">
+                Estimated Scrap Value:
+              </span>
+              <span className="text-xl font-extrabold text-brand-primary">
+                ₹{totalEstimatedValue.toFixed(0)}
+              </span>
+            </div>
 
+            <div className="flex gap-3 pt-2">
               <button
                 onClick={handleResetUpload}
-                className="w-full sm:w-auto py-3.5 px-5 rounded-xl bg-brand-bg text-brand-text font-semibold text-sm hover:bg-brand-light border border-brand-border transition-all cursor-pointer"
+                className="py-3 px-5 rounded-xl border border-brand-border text-brand-text font-bold text-xs hover:bg-brand-bg transition cursor-pointer"
               >
-                Try Another Photo
+                Retake Photo
+              </button>
+
+              <button
+                onClick={() => setCurrentStep(3)}
+                className="flex-1 py-3 px-6 rounded-xl bg-brand-primary text-white font-bold text-xs sm:text-sm hover:bg-brand-dark transition shadow-2xs cursor-pointer"
+              >
+                Continue to Address & Schedule →
               </button>
             </div>
-
           </div>
         )}
 
-        {/* ═════════════════════════════════════════════════════════════════════
-           STEP 3 — USER ENTERS WEIGHT
-           ═════════════════════════════════════════════════════════════════════ */}
+        {/* STEP 3 — ADDRESS & SCHEDULE */}
         {currentStep === 3 && (
           <div className="bg-brand-card border border-brand-border rounded-3xl p-6 sm:p-8 shadow-xs space-y-6 animate-[fadeIn_200ms_ease-out]">
-            
             <div className="pb-3 border-b border-brand-border">
-              <h3 className="text-lg font-bold text-brand-text">How much scrap do you have?</h3>
+              <h3 className="text-lg font-bold text-brand-text">Pickup Address & Schedule 📍</h3>
               <p className="text-xs text-brand-text-secondary mt-0.5">
-                Enter estimated quantity in kg for each material
+                Registered collectors in {selectedCity} will receive your order
               </p>
             </div>
 
-            {/* List of items with weight inputs */}
-            <div className="space-y-4">
-              {detectedItems.map((item) => {
-                const subtotal = item.pricePerKg * item.weightKg;
+            <div className="space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-brand-text uppercase tracking-wider mb-1">
+                  Pickup Address *
+                </label>
+                <textarea
+                  rows={3}
+                  value={pickupAddress}
+                  onChange={(e) => setPickupAddress(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-brand-border text-brand-text text-xs focus:outline-none focus:border-brand-primary font-medium"
+                />
+              </div>
 
-                return (
-                  <div key={item.matchedScrapId} className="p-4 rounded-2xl border border-brand-border bg-brand-bg/60 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xl">{item.icon}</span>
-                        <h4 className="font-bold text-brand-text text-sm sm:text-base">{item.name}</h4>
-                      </div>
-                      <span className="text-xs font-bold text-brand-primary">
-                        ₹{item.pricePerKg} / {item.unit}
-                      </span>
-                    </div>
+              <div>
+                <label className="block font-bold text-brand-text uppercase tracking-wider mb-1">
+                  Preferred Pickup Slot *
+                </label>
+                <select
+                  value={timeSlot}
+                  onChange={(e) => setTimeSlot(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-brand-border text-brand-text text-xs focus:outline-none focus:border-brand-primary font-medium"
+                >
+                  <option>Today, 4:00 PM</option>
+                  <option>Today, 6:00 PM</option>
+                  <option>Tomorrow, 10:30 AM</option>
+                  <option>Tomorrow, 2:30 PM</option>
+                </select>
+              </div>
 
-                    <div className="flex items-center justify-between gap-4 pt-1">
-                      <div className="flex items-center gap-2">
-                        <label htmlFor={`weight-input-${item.matchedScrapId}`} className="text-xs font-semibold text-brand-text-secondary">
-                          Weight:
-                        </label>
-                        <div className="relative w-28">
-                          <input
-                            id={`weight-input-${item.matchedScrapId}`}
-                            type="number"
-                            step="1"
-                            min="1"
-                            value={item.weightKg}
-                            onChange={(e) => handleWeightChange(item.matchedScrapId, e.target.value)}
-                            className="w-full pl-3 pr-8 py-2 text-sm font-bold text-brand-text border border-brand-border rounded-xl focus:outline-none focus:border-brand-primary bg-white text-right shadow-2xs"
-                          />
-                          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-brand-text-secondary">
-                            kg
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="text-right">
-                        <span className="text-[10px] text-brand-text-secondary block font-medium">Estimated value</span>
-                        <span className="font-extrabold text-brand-primary text-base">₹{subtotal.toFixed(0)}</span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Continue Button */}
-            <button
-              onClick={() => setCurrentStep(4)}
-              className="w-full py-3.5 rounded-xl bg-brand-primary text-white font-bold text-sm hover:bg-brand-dark transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
-            >
-              <span>Continue →</span>
-            </button>
-
-          </div>
-        )}
-
-        {/* ═════════════════════════════════════════════════════════════════════
-           STEP 4 — ESTIMATED VALUE SUMMARY
-           ═════════════════════════════════════════════════════════════════════ */}
-        {currentStep === 4 && (
-          <div className="bg-brand-card border border-brand-border rounded-3xl p-6 sm:p-8 shadow-xs space-y-6 animate-[fadeIn_200ms_ease-out]">
-            
-            <div className="text-center space-y-1 pb-4 border-b border-brand-border">
-              <span className="text-xs font-bold text-brand-text-secondary uppercase tracking-wider">
-                Your Estimated Scrap Value
-              </span>
-              <div className="text-4xl sm:text-5xl font-extrabold text-brand-primary">
-                ₹{totalEstimatedValue.toFixed(0)}
+              <div className="bg-brand-bg p-4 rounded-2xl border border-brand-border space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-brand-text-secondary">Est. Total Scrap Value:</span>
+                  <span className="font-extrabold text-brand-primary">₹{totalEstimatedValue.toFixed(0)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-brand-text-secondary">Assigned Collector:</span>
+                  <span className="font-semibold text-brand-text">Auto-matching active collectors in {selectedCity}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-brand-text-secondary">Pickup Fee:</span>
+                  <span className="font-bold text-emerald-600">FREE Doorstep Pickup</span>
+                </div>
               </div>
             </div>
 
-            {/* Breakdown Table */}
-            <div className="space-y-2">
-              {detectedItems.map((item) => {
-                const subtotal = item.pricePerKg * item.weightKg;
-                return (
-                  <div key={item.matchedScrapId} className="flex items-center justify-between text-xs sm:text-sm bg-brand-bg/60 p-3 rounded-xl border border-brand-border/60">
-                    <span className="font-semibold text-brand-text">
-                      {item.name} <span className="text-brand-text-secondary font-normal ml-2">{item.weightKg} kg × ₹{item.pricePerKg}</span>
-                    </span>
-                    <span className="font-extrabold text-brand-text">₹{subtotal.toFixed(0)}</span>
-                  </div>
-                );
-              })}
-
-              <div className="pt-2 flex justify-between text-sm font-extrabold text-brand-text border-t border-brand-border">
-                <span>Estimated Total</span>
-                <span className="text-brand-primary">₹{totalEstimatedValue.toFixed(0)}</span>
-              </div>
-            </div>
-
-            {/* Disclaimer */}
-            <div className="bg-brand-bg border border-brand-border rounded-xl p-3.5 text-xs text-brand-text-secondary text-center leading-relaxed">
-              Final amount may vary after the collector weighs your scrap.
-            </div>
-
-            {/* Find Collector Action */}
-            <button
-              onClick={() => setCurrentStep(5)}
-              className="w-full py-3.5 rounded-xl bg-brand-primary text-white font-bold text-base hover:bg-brand-dark transition-all shadow-xs cursor-pointer"
-            >
-              Find a Collector →
-            </button>
-
-          </div>
-        )}
-
-        {/* ═════════════════════════════════════════════════════════════════════
-           STEP 5 — CHOOSE COLLECTOR
-           ═════════════════════════════════════════════════════════════════════ */}
-        {currentStep === 5 && !isConfirmed && (
-          <div className="space-y-4 animate-[fadeIn_200ms_ease-out]">
-            <div className="text-center space-y-1 mb-2">
-              <h3 className="text-xl font-bold text-brand-text">Verified Collectors near {selectedCity}</h3>
-              <p className="text-brand-text-secondary text-xs">
-                Select your preferred collector for free doorstep pickup
-              </p>
-            </div>
-
-            {nearbyCollectors.map((c) => (
-              <div
-                key={c.id}
-                className="bg-brand-card border border-brand-border hover:border-brand-primary rounded-2xl p-5 shadow-xs transition-all flex items-center justify-between gap-4"
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setCurrentStep(2)}
+                className="py-3 px-5 rounded-xl border border-brand-border text-brand-text font-bold text-xs hover:bg-brand-bg transition cursor-pointer"
               >
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-bold text-brand-text text-base">{c.name}</h4>
-                    <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-full">
-                      ✓ Verified
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3 text-xs text-brand-text-secondary font-medium">
-                    <span className="text-amber-600 font-bold">⭐ {c.rating}</span>
-                    <span>• 📍 {c.distance}</span>
-                    <span className="text-emerald-700 font-bold">• Free Pickup</span>
-                  </div>
-                </div>
+                Back
+              </button>
 
-                <button
-                  onClick={() => {
-                    setSelectedCollector(c);
-                    setCurrentStep(6);
-                  }}
-                  className="py-2.5 px-4 rounded-xl bg-brand-primary text-white font-bold text-xs hover:bg-brand-dark transition cursor-pointer flex-shrink-0"
-                >
-                  Choose Collector
-                </button>
-              </div>
-            ))}
+              <button
+                onClick={handleConfirmPickup}
+                className="flex-1 py-3.5 px-6 rounded-xl bg-brand-primary text-white font-extrabold text-sm hover:bg-brand-dark transition shadow-md cursor-pointer"
+              >
+                Request Pickup →
+              </button>
+            </div>
           </div>
         )}
 
-        {/* ═════════════════════════════════════════════════════════════════════
-           STEP 6 — PICKUP CONFIRMATION & RECEIPT
-           ═════════════════════════════════════════════════════════════════════ */}
-        {currentStep === 6 && (
-          <div className="animate-[fadeIn_200ms_ease-out]">
-            {!isConfirmed ? (
-              <div className="bg-brand-card border border-brand-border rounded-3xl p-6 sm:p-8 shadow-xs space-y-6">
-                <div className="pb-3 border-b border-brand-border text-center">
-                  <h3 className="text-xl font-bold text-brand-text">Pickup Summary</h3>
-                  <p className="text-xs text-brand-text-secondary mt-0.5">
-                    Review details before confirming request
-                  </p>
-                </div>
+        {/* STEP 4 — CONFIRMED RECEIPT */}
+        {currentStep === 4 && isConfirmed && (
+          <div className="bg-emerald-50 border-2 border-emerald-300 rounded-3xl p-8 text-center space-y-5 animate-[fadeIn_200ms_ease-out]">
+            <div className="w-16 h-16 bg-emerald-600 text-white rounded-full flex items-center justify-center mx-auto shadow-sm text-3xl font-bold">
+              🎉
+            </div>
 
-                <div className="bg-brand-bg/60 border border-brand-border rounded-2xl p-4 space-y-3 text-xs sm:text-sm">
-                  <div className="flex justify-between border-b pb-2">
-                    <span className="text-brand-text-secondary">Scrap Value</span>
-                    <span className="font-extrabold text-brand-primary text-base">
-                      ₹{totalEstimatedValue.toFixed(0)} estimated
-                    </span>
-                  </div>
+            <div>
+              <h3 className="text-2xl font-bold text-emerald-950">Pickup Request Submitted!</h3>
+              <p className="text-xs text-emerald-800 mt-1 font-medium">
+                Your request has been broadcasted to registered collectors in {selectedCity}.
+              </p>
+            </div>
 
-                  <div className="flex justify-between border-b pb-2">
-                    <span className="text-brand-text-secondary">Collector</span>
-                    <span className="font-bold text-brand-text">{selectedCollector.name}</span>
-                  </div>
-
-                  <div className="flex justify-between border-b pb-2">
-                    <span className="text-brand-text-secondary">Location</span>
-                    <span className="font-semibold text-brand-text">{selectedCity}, Maharashtra</span>
-                  </div>
-
-                  <div className="flex justify-between">
-                    <span className="text-brand-text-secondary">Pickup</span>
-                    <span className="font-bold text-emerald-600">Free</span>
-                  </div>
-                </div>
-
-                <button
-                  onClick={handleConfirmPickup}
-                  className="w-full py-4 rounded-xl bg-brand-primary text-white font-bold text-base hover:bg-brand-dark transition-all shadow-xs cursor-pointer"
-                >
-                  Confirm Pickup
-                </button>
+            <div className="bg-white rounded-2xl p-4 text-xs text-left space-y-2 border border-emerald-200 shadow-2xs font-mono max-w-sm mx-auto">
+              <div className="flex justify-between border-b pb-1.5">
+                <span className="text-gray-500">Request ID:</span>
+                <span className="font-bold text-gray-900">{confirmedRequestId}</span>
               </div>
-            ) : (
-              /* Receipt Card */
-              <div className="bg-emerald-50 border-2 border-emerald-300 rounded-3xl p-8 text-center space-y-5 animate-[fadeIn_200ms_ease-out]">
-                <div className="w-16 h-16 bg-emerald-600 text-white rounded-full flex items-center justify-center mx-auto shadow-sm text-3xl font-bold">
-                  🎉
-                </div>
-
-                <div>
-                  <h3 className="text-2xl font-bold text-emerald-950">🎉 Pickup Request Confirmed!</h3>
-                  <p className="text-xs text-emerald-800 mt-1 font-medium">
-                    Your collector will contact you shortly.
-                  </p>
-                </div>
-
-                <div className="bg-white rounded-2xl p-4 text-xs text-left space-y-2 border border-emerald-200 shadow-2xs font-mono max-w-sm mx-auto">
-                  <div className="flex justify-between border-b pb-1.5">
-                    <span className="text-gray-500">Request ID:</span>
-                    <span className="font-bold text-gray-900">{requestId}</span>
-                  </div>
-                  <div className="flex justify-between border-b pb-1.5">
-                    <span className="text-gray-500">Collector:</span>
-                    <span className="font-bold text-gray-900">{selectedCollector.name}</span>
-                  </div>
-                  <div className="flex justify-between border-b pb-1.5">
-                    <span className="text-gray-500">Estimated Value:</span>
-                    <span className="font-extrabold text-emerald-600">₹{totalEstimatedValue.toFixed(0)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Location:</span>
-                    <span className="font-semibold text-gray-900">{selectedCity}, Maharashtra</span>
-                  </div>
-                </div>
-
-                <div className="flex justify-center gap-3 pt-2">
-                  <button
-                    onClick={() => navigate('/')}
-                    className="py-3 px-6 bg-brand-primary text-white font-bold text-sm rounded-xl hover:bg-brand-dark transition cursor-pointer"
-                  >
-                    View Request
-                  </button>
-                </div>
+              <div className="flex justify-between border-b pb-1.5">
+                <span className="text-gray-500">Status:</span>
+                <span className="font-bold text-amber-700">PENDING PICKUP</span>
               </div>
-            )}
+              <div className="flex justify-between border-b pb-1.5">
+                <span className="text-gray-500">Estimated Value:</span>
+                <span className="font-extrabold text-emerald-600">₹{totalEstimatedValue.toFixed(0)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Pickup Address:</span>
+                <span className="font-semibold text-gray-900 truncate max-w-[180px]">{pickupAddress}</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3 pt-2">
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="w-full py-3.5 px-6 rounded-xl bg-brand-primary text-white font-extrabold text-sm hover:bg-brand-dark transition shadow-md cursor-pointer"
+              >
+                Track Pickup in Dashboard →
+              </button>
+            </div>
           </div>
         )}
-
       </main>
 
       <Footer />
-      <AuthModal />
-
-      <style>{`
-        @keyframes scan {
-          0% { top: 0%; }
-          50% { top: 95%; }
-          100% { top: 0%; }
-        }
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(6px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-      `}</style>
     </div>
   );
 }

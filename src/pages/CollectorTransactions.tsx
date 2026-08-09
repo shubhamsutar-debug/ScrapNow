@@ -3,16 +3,20 @@ import Footer from '../components/Footer';
 import { useAuth } from '../context/AuthContext';
 
 export default function CollectorTransactions() {
-  const { pickups } = useAuth();
+  const { user, pickups } = useAuth();
 
-  // Completed transactions
-  const completedPickups = pickups.filter((p) => p.status === 'Completed');
+  const collectorId = user?.collectorProfile?.collectorId || user?.userId || '';
+
+  // Only show this collector's completed transactions
+  const completedPickups = pickups.filter(
+    (p) => p.status === 'Completed' && p.collectorId === collectorId
+  );
 
   const totalScrapCollectedKg = completedPickups.reduce(
     (acc, p) => acc + p.items.reduce((sum, item) => sum + item.weightKg, 0),
-    24
+    0
   );
-  const totalCashPaid = completedPickups.reduce((acc, p) => acc + p.estimatedValue, 420);
+  const totalCashPaid = completedPickups.reduce((acc, p) => acc + p.estimatedValue, 0);
 
   return (
     <div className="min-h-screen bg-brand-bg flex flex-col justify-between">

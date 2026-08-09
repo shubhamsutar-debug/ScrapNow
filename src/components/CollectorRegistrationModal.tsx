@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCity } from '../context/CityContext';
 
@@ -13,6 +14,7 @@ export const CollectorRegistrationModal: React.FC<CollectorRegistrationModalProp
 }) => {
   const { user, upgradeToCollector } = useAuth();
   const { selectedCity } = useCity();
+  const navigate = useNavigate();
 
   const [businessName, setBusinessName] = useState(user?.name ? `${user.name} Scrap Mart` : '');
   const [vehicleType, setVehicleType] = useState('Pickup Truck');
@@ -115,10 +117,10 @@ export const CollectorRegistrationModal: React.FC<CollectorRegistrationModalProp
               </p>
             </div>
             <button
-              onClick={onClose}
+              onClick={() => { onClose(); navigate('/collector/dashboard'); }}
               className="w-full py-3 rounded-xl bg-brand-primary text-white font-bold text-sm hover:bg-brand-dark transition"
             >
-              Continue to Dashboard
+              Continue to Collector Dashboard →
             </button>
           </div>
         )}

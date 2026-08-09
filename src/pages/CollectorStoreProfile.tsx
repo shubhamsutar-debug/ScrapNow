@@ -33,7 +33,7 @@ export default function CollectorStoreProfile() {
   const [city, setCity] = useState(prof.city);
   const [pincode, setPincode] = useState(prof.pincode);
   const [acceptedCategories, setAcceptedCategories] = useState<string[]>(prof.acceptedCategories);
-  const [pickupAvailable, setPickupAvailable] = useState<boolean>(prof.pickupAvailable);
+  const [pickupAvailable, _setPickupAvailable] = useState<boolean>(prof.pickupAvailable);
   const [pickupRadiusKm, setPickupRadiusKm] = useState<number>(prof.pickupRadiusKm);
   const [workingDays, setWorkingDays] = useState(prof.workingDays);
   const [workingHours, setWorkingHours] = useState(prof.workingHours);

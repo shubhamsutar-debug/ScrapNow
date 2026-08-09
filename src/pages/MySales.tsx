@@ -6,8 +6,8 @@ import { useAuth } from '../context/AuthContext';
 
 export default function MySales() {
   const navigate = useNavigate();
-  const { pickups } = useAuth();
-  const completedSales = pickups.filter((p) => p.status === 'Completed');
+  const { user, pickups } = useAuth();
+  const completedSales = pickups.filter((p) => p.userId === user?.userId && p.status === 'Completed');
 
   return (
     <div className="min-h-screen bg-brand-bg flex flex-col justify-between">

@@ -2,7 +2,7 @@ import { getScrapItemsForCity, type ScrapItem } from '../data/scrapItems';
 
 export interface AIDetectedItem {
   name: string;
-  category: 'Paper' | 'Plastic' | 'Metal' | 'E-Waste' | 'Rubber' | 'Other';
+  category: 'Paper' | 'Plastic' | 'Metal' | 'E-waste' | 'Rubber' | 'Other';
   confidence: number; // 0 to 1 e.g. 0.94 (rendered as 94%)
   pricePerKg: number;
   unit: string;

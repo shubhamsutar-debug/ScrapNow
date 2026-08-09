@@ -7,7 +7,9 @@ import { useCity } from '../context/CityContext';
 
 export default function MyPickups() {
   const navigate = useNavigate();
-  const { pickups } = useAuth();
+  // Filter to current user's pickups only
+  const { user, pickups } = useAuth();
+  const userPickups = pickups.filter((p) => p.userId === user?.userId);
   const { selectedCity } = useCity();
 
   return (
@@ -31,51 +33,67 @@ export default function MyPickups() {
         </div>
 
         <div className="space-y-4">
-          {pickups.map((p) => (
-            <div key={p.id} className="bg-brand-card border border-brand-border rounded-2xl p-5 shadow-xs space-y-4">
-              <div className="flex items-center justify-between border-b border-brand-border pb-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-extrabold text-brand-text">ID: {p.id}</span>
-                  <span className={`px-2.5 py-0.5 text-[11px] font-extrabold rounded-full ${
-                    p.status === 'Completed' ? 'bg-emerald-100 text-emerald-800' : 'bg-brand-light text-brand-dark'
-                  }`}>
-                    {p.status}
+          {userPickups.length === 0 ? (
+            <div className="bg-brand-card border border-brand-border rounded-2xl p-12 text-center space-y-4">
+              <div className="w-14 h-14 bg-brand-bg rounded-full flex items-center justify-center mx-auto text-2xl">🚚</div>
+              <div>
+                <h3 className="font-bold text-brand-text text-base">No pickups yet</h3>
+                <p className="text-brand-text-secondary text-xs mt-1">Submit your scrap to get a doorstep collection started.</p>
+              </div>
+              <button onClick={() => navigate('/sell-scrap')} className="py-2.5 px-6 bg-brand-primary text-white font-bold text-xs rounded-xl hover:bg-brand-dark transition">
+                Sell Scrap →
+              </button>
+            </div>
+          ) : (
+            userPickups.map((p) => (
+              <div key={p.id} className="bg-brand-card border border-brand-border rounded-2xl p-5 shadow-xs space-y-4">
+                <div className="flex items-center justify-between border-b border-brand-border pb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-extrabold text-brand-text">ID: {p.id}</span>
+                    <span className={`px-2.5 py-0.5 text-[11px] font-extrabold rounded-full ${
+                      p.status === 'Completed' ? 'bg-emerald-100 text-emerald-800' : 'bg-brand-light text-brand-dark'
+                    }`}>
+                      {p.status}
+                    </span>
+                  </div>
+                  <span className="text-xs text-brand-text-secondary font-medium">
+                    {p.timeSlot}
                   </span>
                 </div>
-                <span className="text-xs text-brand-text-secondary font-medium">
-                  {p.timeSlot}
-                </span>
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs sm:text-sm">
-                <div>
-                  <span className="text-brand-text-secondary block">Collector:</span>
-                  <span className="font-bold text-brand-text">{p.collectorName} ({p.collectorRating} ⭐)</span>
-                </div>
-                <div>
-                  <span className="text-brand-text-secondary block">Estimated Value:</span>
-                  <span className="font-extrabold text-brand-primary">₹{p.estimatedValue}</span>
-                </div>
-                <div className="sm:col-span-2">
-                  <span className="text-brand-text-secondary block">Pickup Address:</span>
-                  <span className="font-semibold text-brand-text">{p.pickupAddress}</span>
-                </div>
-              </div>
-
-              <div className="bg-brand-bg/60 p-3 rounded-xl border border-brand-border space-y-1">
-                <span className="text-[11px] font-bold text-brand-text-secondary uppercase tracking-wider block">
-                  Items to Pick Up:
-                </span>
-                <div className="flex flex-wrap gap-2 pt-0.5">
-                  {p.items.map((item) => (
-                    <span key={item.id} className="bg-white border border-brand-border px-2.5 py-1 rounded-lg text-xs font-semibold text-brand-text">
-                      {item.name} ({item.weightKg} kg @ ₹{item.pricePerKg}/kg)
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs sm:text-sm">
+                  <div>
+                    <span className="text-brand-text-secondary block">Collector:</span>
+                    <span className="font-bold text-brand-text">
+                      {p.collectorName || 'Not assigned yet'}
+                      {p.collectorRating ? ` (${p.collectorRating} ⭐)` : ''}
                     </span>
-                  ))}
+                  </div>
+                  <div>
+                    <span className="text-brand-text-secondary block">Estimated Value:</span>
+                    <span className="font-extrabold text-brand-primary">₹{p.estimatedValue}</span>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <span className="text-brand-text-secondary block">Pickup Address:</span>
+                    <span className="font-semibold text-brand-text">{p.pickupAddress}</span>
+                  </div>
+                </div>
+
+                <div className="bg-brand-bg/60 p-3 rounded-xl border border-brand-border space-y-1">
+                  <span className="text-[11px] font-bold text-brand-text-secondary uppercase tracking-wider block">
+                    Items to Pick Up:
+                  </span>
+                  <div className="flex flex-wrap gap-2 pt-0.5">
+                    {p.items.map((item) => (
+                      <span key={item.id} className="bg-white border border-brand-border px-2.5 py-1 rounded-lg text-xs font-semibold text-brand-text">
+                        {item.name} ({item.weightKg} kg @ ₹{item.pricePerKg}/kg)
+                      </span>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </main>
 

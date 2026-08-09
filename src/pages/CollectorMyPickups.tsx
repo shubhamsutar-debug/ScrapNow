@@ -1,10 +1,9 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import CollectorNavbar from '../components/CollectorNavbar';
 import Footer from '../components/Footer';
 import {
   useAuth,
   type PickupRequest,
-  type PickupStatus,
   type PickupItem,
 } from '../context/AuthContext';
 
