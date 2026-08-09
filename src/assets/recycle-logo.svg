@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!--
+    Universal Recycling Symbol — three-arrow "chasing arrows" design.
+    Each arm is a curved band with a wide chevron arrowhead.
+    Segment 1 built from scratch; Segments 2 & 3 are 120° rotations.
+    Two-tone fill gives the 3-D bevel visible in the reference image.
+  -->
+
+  <!--
+    Arm shape (pointing UP, centred in 100×100 box):
+      Arrowhead tip:   (50, 8)
+      Arrowhead left:  (40, 8) → shaft-left starts
+      Arrowhead right: (60, 8) → shaft-right starts
+      The shaft curves down and around then exits at the lower right.
+      At the tail the inner corner has a notch cut inward.
+
+    We approximate the curve with straight lines — the chunkiness matches
+    the emoji/icon reference image.
+
+    Arrowhead (top):
+      (50,8) outer tip
+      (43,8) left wing
+      (43,20) left shaft outer
+      ... curves down to (30, 55) at bottom of arm ...
+      (37,55) right shaft inner (notch)
+      (37,48) notch inner step
+      (44,48) notch right
+      (44,55) resume right shaft inner
+      (57,55) right shaft outer
+      ... curves back up ...
+      (57,20) right shaft outer top
+      (57, 8) right wing
+      back to (50,8)
+
+    For a cleaner look we'll use the polygon/path below.
+  -->
+
+  <defs>
+    <path id="arm" d="
+      M 50 6
+      L 41 6
+      L 23 42
+      L 32 42
+      L 32 52
+      L 38 52
+      L 38 44
+      L 43 44
+      L 62 44
+      L 62 52
+      L 68 52
+      L 68 42
+      L 77 42
+      L 59 6
+      Z
+    "/>
+  </defs>
+
+  <!-- Arm 1 (top / pointing up) -->
+  <use href="#arm" fill="#4CAF50"/>
+  <!-- shadow face: left side of arm -->
+  <path d="M 50 6 L 41 6 L 23 42 L 32 42 L 32 52 L 38 52 L 38 44 L 43 44 L 50 6 Z"
+        fill="#2E7D32" opacity="0.38"/>
+
+  <!-- Arm 2 (lower-right / rotated 120°) -->
+  <g transform="rotate(120 50 50)">
+    <use href="#arm" fill="#4CAF50"/>
+    <path d="M 50 6 L 41 6 L 23 42 L 32 42 L 32 52 L 38 52 L 38 44 L 43 44 L 50 6 Z"
+          fill="#2E7D32" opacity="0.38"/>
+  </g>
+
+  <!-- Arm 3 (lower-left / rotated 240°) -->
+  <g transform="rotate(240 50 50)">
+    <use href="#arm" fill="#4CAF50"/>
+    <path d="M 50 6 L 41 6 L 23 42 L 32 42 L 32 52 L 38 52 L 38 44 L 43 44 L 50 6 Z"
+          fill="#2E7D32" opacity="0.38"/>
+  </g>
+</svg>

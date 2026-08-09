@@ -1,9 +1,21 @@
-import React from 'react';
 import heroImage from '../assets/images/hero-recycling.jpg';
+import { useAuth } from '../context/AuthContext';
 
-const Hero: React.FC = () => {
+const Hero = () => {
+  const { user, openAuthModal } = useAuth();
+
+  const handleSellScrap = () => {
+    if (user) {
+      // User is logged in — placeholder for future sell scrap flow
+      alert(`Hi ${user.name}! Sell Scrap flow coming soon.`);
+    } else {
+      // Not logged in — trigger auth with sell-scrap intent
+      openAuthModal('sell-scrap');
+    }
+  };
+
   return (
-    <section className="py-12 md:py-20 px-4 w-full bg-gradient-to-b from-brand-bg to-white relative overflow-hidden">
+    <section id="home" className="py-12 md:py-20 px-4 w-full bg-gradient-to-b from-brand-bg to-white relative overflow-hidden">
       {/* Background soft gradient */}
       <div className="absolute top-0 right-0 w-3/4 h-full bg-gradient-to-bl from-brand-light/40 to-transparent -z-10 rounded-l-[100px] blur-3xl opacity-60"></div>
       
@@ -34,16 +46,16 @@ const Hero: React.FC = () => {
           
           {/* CTA Buttons */}
           <div className="mt-6 flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
-            <button className="bg-brand-primary text-white font-semibold px-7 py-3 rounded-lg hover:bg-brand-dark transition shadow-sm inline-flex justify-center items-center gap-2 w-full sm:w-auto">
+            <button onClick={handleSellScrap} className="bg-brand-primary text-white font-semibold px-7 py-3 rounded-lg hover:bg-brand-dark transition shadow-sm inline-flex justify-center items-center gap-2 w-full sm:w-auto cursor-pointer">
               <span>♻️</span> Sell Scrap 
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="5" y1="12" x2="19" y2="12"></line>
                 <polyline points="12 5 19 12 12 19"></polyline>
               </svg>
             </button>
-            <button className="bg-brand-card border border-brand-border text-brand-text font-medium px-7 py-3 rounded-lg hover:bg-gray-50 transition w-full sm:w-auto text-center">
+            <a href="#scrap-prices" className="bg-brand-card border border-brand-border text-brand-text font-medium px-7 py-3 rounded-lg hover:bg-gray-50 transition w-full sm:w-auto text-center inline-flex justify-center items-center">
               View All Prices
-            </button>
+            </a>
           </div>
           
           {/* Benefit Badges */}

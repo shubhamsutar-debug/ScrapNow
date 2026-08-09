@@ -41,7 +41,7 @@ const ScrapPrices = () => {
   }, [filteredItems]);
 
   return (
-    <section className="py-12 md:py-16 px-4">
+    <section id="scrap-prices" className="py-12 md:py-16 px-4">
       <div className="max-w-7xl mx-auto">
         {/* Header Row */}
         <div className="flex justify-between items-center flex-wrap gap-4 mb-8">
