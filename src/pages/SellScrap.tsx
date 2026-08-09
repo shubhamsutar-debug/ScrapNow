@@ -41,7 +41,7 @@ export default function SellScrap() {
   const [pickupAddress, setPickupAddress] = useState(
     'Flat 402, Mayur Colony, Kothrud, Pune, Maharashtra - 411038'
   );
-  const [timeSlot, setTimeSlot] = useState('Today, 4:00 PM');
+  const [timeSlot, setTimeSlot] = useState('Today, 4:00 PM – 6:00 PM');
   const [isConfirmed, setIsConfirmed] = useState(false);
   const [confirmedRequestId, setConfirmedRequestId] = useState<string | null>(null);
 
@@ -218,6 +218,11 @@ export default function SellScrap() {
       amount: Math.round(item.weightKg * item.pricePerKg),
     }));
 
+    // Extract startTime and endTime from timeSlot e.g. "Today, 4:00 PM – 6:00 PM"
+    const timesMatch = timeSlot.match(/(\d+:\d+\s+[AP]M)\s*–\s*(\d+:\d+\s+[AP]M)/i);
+    const startTime = timesMatch ? timesMatch[1] : '4:00 PM';
+    const endTime = timesMatch ? timesMatch[2] : '6:00 PM';
+
     const newReq = addPickupRequest({
       userId: user?.userId || 'guest-user',
       userName: user?.name || 'Shubham Sutar',
@@ -229,6 +234,8 @@ export default function SellScrap() {
       collectorAddress: selectedCity,
       pickupAddress: pickupAddress,
       timeSlot: timeSlot,
+      startTime: startTime,
+      endTime: endTime,
       estimatedValue: Math.round(totalEstimatedValue),
       status: 'Pending Pickup',
       items: itemsForPayload,
@@ -681,18 +688,21 @@ export default function SellScrap() {
 
               <div>
                 <label className="block font-bold text-brand-text uppercase tracking-wider mb-1">
-                  Preferred Pickup Slot *
+                  Preferred Pickup Time Window *
                 </label>
                 <select
                   value={timeSlot}
                   onChange={(e) => setTimeSlot(e.target.value)}
-                  className="w-full p-3 rounded-xl border border-brand-border text-brand-text text-xs focus:outline-none focus:border-brand-primary font-medium"
+                  className="w-full p-3 rounded-xl border border-brand-border text-brand-text text-xs focus:outline-none focus:border-brand-primary font-medium bg-white"
                 >
-                  <option>Today, 4:00 PM</option>
-                  <option>Today, 6:00 PM</option>
-                  <option>Tomorrow, 10:30 AM</option>
-                  <option>Tomorrow, 2:30 PM</option>
+                  <option value="Today, 4:00 PM – 6:00 PM">Today, 4:00 PM – 6:00 PM</option>
+                  <option value="Today, 6:00 PM – 8:00 PM">Today, 6:00 PM – 8:00 PM</option>
+                  <option value="Tomorrow, 10:00 AM – 12:00 PM">Tomorrow, 10:00 AM – 12:00 PM</option>
+                  <option value="Tomorrow, 2:00 PM – 4:00 PM">Tomorrow, 2:00 PM – 4:00 PM</option>
                 </select>
+                <p className="text-[11px] text-brand-text-secondary mt-1 font-medium">
+                  Collector will arrive within the selected time window.
+                </p>
               </div>
 
               <div className="bg-brand-bg p-4 rounded-2xl border border-brand-border space-y-2">

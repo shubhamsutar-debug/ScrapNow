@@ -271,7 +271,12 @@ export default function Dashboard() {
                   <div className="flex items-center justify-between border-b border-white/20 pb-3">
                     <div className="flex items-center gap-2">
                       <span className="w-3 h-3 bg-emerald-400 rounded-full animate-ping" />
-                      <h4 className="font-extrabold text-sm sm:text-base">Collector is On The Way</h4>
+                      <div>
+                        <h4 className="font-extrabold text-sm sm:text-base">Collector is On The Way</h4>
+                        <p className="text-[11px] text-emerald-200">
+                          Estimated Arrival: <strong>~15 mins</strong> (within {upcomingPickup.timeSlot} window)
+                        </p>
+                      </div>
                     </div>
                     <span className="px-2.5 py-0.5 bg-white/20 text-white text-[10px] font-bold rounded-full">
                       Approx. distance: 2.4 km away

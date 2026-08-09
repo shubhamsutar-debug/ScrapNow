@@ -75,7 +75,9 @@ export interface PickupRequest {
   collectorDistance?: string;
   collectorAddress?: string;
   pickupAddress: string;
-  timeSlot: string;
+  timeSlot: string; // Time Window String e.g. "Today, 4:00 PM – 6:00 PM"
+  startTime?: string;
+  endTime?: string;
   estimatedValue: number;
   status: PickupStatus;
   createdAt: string;
@@ -126,7 +128,7 @@ interface AuthContextValue {
 
 const CURRENT_USER_KEY = 'scrapnow_user';
 const ALL_USERS_KEY = 'scrapnow_users';
-const PICKUPS_KEY = 'scrapnow_pickups_v3';
+const PICKUPS_KEY = 'scrapnow_pickups_v4';
 
 // ─── Default Registered Accounts for Demo ─────────────────────────────────────
 
@@ -184,7 +186,9 @@ const INITIAL_MOCK_PICKUPS: PickupRequest[] = [
     collectorDistance: '1.4 km away',
     collectorAddress: 'Kothrud, Pune',
     pickupAddress: 'Flat 402, Mayur Colony, Kothrud, Pune, Maharashtra - 411038',
-    timeSlot: 'Today, 2:30 PM',
+    timeSlot: 'Today, 4:00 PM – 6:00 PM',
+    startTime: '4:00 PM',
+    endTime: '6:00 PM',
     estimatedValue: 417,
     status: 'Accepted',
     createdAt: new Date().toISOString(),
@@ -203,7 +207,9 @@ const INITIAL_MOCK_PICKUPS: PickupRequest[] = [
     collectorId: '',
     collectorName: 'Not assigned yet',
     pickupAddress: 'Bunglow 14, Prabhat Road, Erandwane, Pune',
-    timeSlot: 'Today, 5:00 PM',
+    timeSlot: 'Today, 6:00 PM – 8:00 PM',
+    startTime: '6:00 PM',
+    endTime: '8:00 PM',
     estimatedValue: 1530,
     status: 'Pending Pickup',
     createdAt: new Date().toISOString(),
@@ -221,7 +227,9 @@ const INITIAL_MOCK_PICKUPS: PickupRequest[] = [
     collectorId: '',
     collectorName: 'Not assigned yet',
     pickupAddress: 'Ideal Colony, Kothrud, Pune',
-    timeSlot: 'Today, 4:00 PM',
+    timeSlot: 'Tomorrow, 10:00 AM – 12:00 PM',
+    startTime: '10:00 AM',
+    endTime: '12:00 PM',
     estimatedValue: 280,
     status: 'Pending Pickup',
     createdAt: new Date().toISOString(),

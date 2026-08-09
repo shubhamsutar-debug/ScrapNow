@@ -17,11 +17,12 @@ const CollectorCTA = () => {
             Register as Collector →
           </button>
         </div>
-        <div className="aspect-[16/9] sm:aspect-[4/3] lg:aspect-auto lg:h-full">
-          <img 
-            src={collectorIllustration} 
-            alt="Collector Illustration" 
-            className="w-full h-full object-cover object-center" 
+        {/* Image: full visible on mobile using object-contain, object-cover on desktop */}
+        <div className="flex items-end justify-center bg-brand-dark px-6 pt-0 pb-0 lg:p-0 lg:block">
+          <img
+            src={collectorIllustration}
+            alt="Collector Illustration"
+            className="w-auto max-h-72 sm:max-h-80 lg:max-h-none lg:w-full lg:h-full object-contain object-bottom lg:object-cover lg:object-center"
           />
         </div>
       </div>
