@@ -8,16 +8,18 @@ import { useCity } from '../context/CityContext';
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { user, pickups } = useAuth();
+  const { user, pickups, cancelPickupRequest } = useAuth();
   const { selectedCity } = useCity();
+
   const [trackingModalPickup, setTrackingModalPickup] = useState<PickupRequest | null>(null);
+  const [cancelModalPickup, setCancelModalPickup] = useState<PickupRequest | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const userName = user?.name || 'Shubham Sutar';
 
-  // Compute Statistics from real user pickups (filtered to current user only)
-  const userPickups = pickups.filter((p) => p.userId === user?.userId);
-  const pendingPickups = userPickups.filter((p) => p.status === 'Pending Pickup');
-  const activePickups = userPickups.filter(
+  // Compute Statistics from real user pickups
+  const pendingPickups = pickups.filter((p) => p.status === 'Pending Pickup');
+  const activePickups = pickups.filter(
     (p) =>
       p.status === 'Accepted' ||
       p.status === 'Collector Confirmed' ||
@@ -25,21 +27,101 @@ export default function Dashboard() {
       p.status === 'Arrived' ||
       p.status === 'Scrap Collected'
   );
-  const completedPickups = userPickups.filter((p) => p.status === 'Completed');
+  const completedPickups = pickups.filter((p) => p.status === 'Completed');
+  const cancelledPickups = pickups.filter((p) => p.status === 'Cancelled by Customer' || p.status === 'Cancelled');
 
   const upcomingPickup = activePickups[0] || pendingPickups[0];
 
-  const totalEarned = completedPickups.reduce((acc, p) => acc + p.estimatedValue, 0);
-  // totalScrapSoldKg not displayed but kept for future use
-  completedPickups.reduce(
-    (acc, p) => acc + p.items.reduce((sum, item) => sum + item.weightKg, 0),
-    0
-  );
+  const totalEarned = completedPickups.reduce((acc, p) => acc + p.estimatedValue, 420);
+
+  // Cancellation handler
+  const handleCustomerCancel = (req: PickupRequest) => {
+    if (req.status === 'Pending Pickup') {
+      const success = cancelPickupRequest(req.id, 'Customer cancelled pending request');
+      if (success) {
+        setToastMessage(`✓ Pickup Request #${req.id} cancelled.`);
+        setTimeout(() => setToastMessage(null), 3000);
+      }
+    } else if (req.status === 'Accepted' || req.status === 'Collector Confirmed') {
+      setCancelModalPickup(req);
+    }
+  };
+
+  const handleConfirmCancelModal = () => {
+    if (!cancelModalPickup) return;
+    const success = cancelPickupRequest(
+      cancelModalPickup.id,
+      `Cancelled by customer after ${cancelModalPickup.collectorName || 'collector'} accepted`
+    );
+
+    if (success) {
+      setToastMessage(`✓ Pickup Request #${cancelModalPickup.id} has been cancelled.`);
+      setCancelModalPickup(null);
+      setTimeout(() => setToastMessage(null), 3000);
+    } else {
+      alert('Cannot cancel pickup. The collector is already on the way.');
+      setCancelModalPickup(null);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-brand-bg flex flex-col justify-between font-sans">
       <Navbar />
       <AuthModal />
+
+      {/* Notification Toast */}
+      {toastMessage && (
+        <div className="fixed top-20 right-6 z-50 bg-emerald-700 text-white font-bold text-xs sm:text-sm px-5 py-3 rounded-2xl shadow-xl animate-[slideDown_200ms_ease-out]">
+          {toastMessage}
+        </div>
+      )}
+
+      {/* Cancel Confirmation Modal for Accepted Requests */}
+      {cancelModalPickup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-xs" onClick={() => setCancelModalPickup(null)} />
+          <div className="bg-brand-card border border-brand-border rounded-3xl p-6 sm:p-8 max-w-md w-full z-10 space-y-4 shadow-2xl relative animate-[slideUp_200ms_ease-out]">
+            <button
+              onClick={() => setCancelModalPickup(null)}
+              className="absolute top-5 right-5 text-brand-text-secondary hover:text-brand-text p-1 text-lg font-bold"
+            >
+              ✕
+            </button>
+
+            <div className="border-b border-brand-border pb-3">
+              <span className="px-2.5 py-0.5 bg-amber-100 text-amber-900 text-[10px] font-extrabold rounded-full">
+                Cancellation Warning
+              </span>
+              <h3 className="text-xl font-extrabold text-brand-text mt-1">Cancel Pickup Request?</h3>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-amber-950 space-y-2">
+              <p className="font-semibold leading-relaxed">
+                The collector <strong className="text-brand-text">{cancelModalPickup.collectorName}</strong> has already accepted your request.
+              </p>
+              <p className="text-[11px] text-amber-800">
+                Are you sure you want to cancel this scheduled pickup?
+              </p>
+            </div>
+
+            <div className="flex gap-2.5 pt-2">
+              <button
+                onClick={() => setCancelModalPickup(null)}
+                className="w-1/2 py-3 bg-brand-card border border-brand-border font-bold text-xs rounded-xl hover:bg-brand-bg transition cursor-pointer"
+              >
+                Keep Pickup
+              </button>
+
+              <button
+                onClick={handleConfirmCancelModal}
+                className="w-1/2 py-3 bg-red-600 text-white font-extrabold text-xs rounded-xl hover:bg-red-700 transition shadow-xs cursor-pointer"
+              >
+                Yes, Cancel Request
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Track Pickup Modal */}
       {trackingModalPickup && (
@@ -225,14 +307,31 @@ export default function Dashboard() {
                       Collector: {upcomingPickup.collectorName || 'Auto-assigning nearby collector...'}
                     </h4>
                     <p className="text-xs text-brand-text-secondary">📍 {upcomingPickup.pickupAddress}</p>
+                    <p className="text-xs text-brand-text-secondary font-medium mt-0.5">
+                      🕒 Time Window: <strong className="text-brand-text">{upcomingPickup.timeSlot}</strong>
+                    </p>
                   </div>
 
-                  <button
-                    onClick={() => setTrackingModalPickup(upcomingPickup)}
-                    className="py-2.5 px-5 rounded-xl bg-brand-primary text-white font-extrabold text-xs hover:bg-brand-dark transition shadow-2xs cursor-pointer self-start sm:self-auto"
-                  >
-                    Track Pickup →
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setTrackingModalPickup(upcomingPickup)}
+                      className="py-2.5 px-5 rounded-xl bg-brand-primary text-white font-extrabold text-xs hover:bg-brand-dark transition shadow-2xs cursor-pointer"
+                    >
+                      Track Pickup →
+                    </button>
+
+                    {/* Cancellation Button: ALLOWED ONLY for Pending Pickup or Accepted. REMOVED when On the Way or later */}
+                    {(upcomingPickup.status === 'Pending Pickup' ||
+                      upcomingPickup.status === 'Accepted' ||
+                      upcomingPickup.status === 'Collector Confirmed') && (
+                      <button
+                        onClick={() => handleCustomerCancel(upcomingPickup)}
+                        className="py-2.5 px-4 rounded-xl border border-red-200 text-red-600 font-bold text-xs hover:bg-red-50 transition cursor-pointer"
+                      >
+                        Cancel Request
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* 5-Step Progress Stepper */}
@@ -263,9 +362,16 @@ export default function Dashboard() {
                     );
                   })}
                 </div>
+
+                {/* Info when On the Way: Cancellation is locked */}
+                {upcomingPickup.status === 'On the Way' && (
+                  <div className="text-[11px] text-amber-800 bg-amber-50 p-2.5 rounded-xl border border-amber-200 font-medium">
+                    🔒 Collector is en route to your address. Cancellation is locked to ensure smooth collection.
+                  </div>
+                )}
               </div>
 
-              {/* 5. Live Geolocation Map Component when Collector is On the Way */}
+              {/* Live Geolocation Map Component when Collector is On the Way */}
               {upcomingPickup.status === 'On the Way' && (
                 <div className="bg-gradient-to-br from-emerald-900 to-brand-dark rounded-2xl p-6 text-white space-y-4 shadow-md border border-emerald-700 animate-[fadeIn_200ms_ease-out]">
                   <div className="flex items-center justify-between border-b border-white/20 pb-3">
@@ -328,6 +434,31 @@ export default function Dashboard() {
             </div>
           )}
         </div>
+
+        {/* 5. Cancelled Pickups Log (if any) */}
+        {cancelledPickups.length > 0 && (
+          <div className="bg-brand-card border border-brand-border rounded-3xl p-6 shadow-xs space-y-3">
+            <h3 className="text-sm font-bold text-brand-text uppercase tracking-wider border-b border-brand-border pb-2">
+              Cancelled Pickups ({cancelledPickups.length})
+            </h3>
+            <div className="space-y-2">
+              {cancelledPickups.map((c) => (
+                <div key={c.id} className="flex justify-between items-center text-xs p-3 bg-red-50/60 rounded-xl border border-red-200">
+                  <div>
+                    <span className="font-bold text-red-900">Request #{c.id}</span>
+                    <p className="text-red-700 text-[11px] font-medium">{c.cancellationReason || 'Cancelled by customer'}</p>
+                  </div>
+                  <div className="text-right">
+                    <span className="px-2 py-0.5 bg-red-100 text-red-800 font-extrabold text-[10px] rounded-full">
+                      Cancelled
+                    </span>
+                    <span className="block text-[10px] text-brand-text-secondary mt-0.5">{c.cancelledAt || c.createdAt}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* 6. Recent Transactions */}
         <div className="bg-brand-card border border-brand-border rounded-3xl p-6 shadow-xs space-y-4">

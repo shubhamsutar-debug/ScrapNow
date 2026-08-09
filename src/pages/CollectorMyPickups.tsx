@@ -64,6 +64,7 @@ export default function CollectorMyPickups() {
   );
 
   const myCompletedPickups = pickups.filter((p) => p.status === 'Completed');
+  const myCancelledPickups = pickups.filter((p) => p.status === 'Cancelled by Customer' || p.status === 'Cancelled');
 
   // Handle status advances matching the 5-state lifecycle
   const handleStatusAdvance = (req: PickupRequest) => {
@@ -749,6 +750,39 @@ export default function CollectorMyPickups() {
                   <div className="text-right">
                     <span className="font-extrabold text-brand-primary">Paid ₹{c.estimatedValue}</span>
                     <span className="block text-[10px] text-emerald-700 font-bold">{c.completedAt}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        {/* Cancelled by Customer Log */}
+        {myCancelledPickups.length > 0 && (
+          <div className="bg-brand-card border border-brand-border rounded-3xl p-6 space-y-3 shadow-xs">
+            <h3 className="text-lg font-bold text-red-900 border-b border-brand-border pb-3 flex items-center gap-2">
+              <span>⚠️</span>
+              <span>Cancelled by Customer ({myCancelledPickups.length})</span>
+            </h3>
+            <div className="space-y-2">
+              {myCancelledPickups.map((c) => (
+                <div key={c.id} className="flex justify-between items-center text-xs p-3.5 bg-red-50/70 rounded-xl border border-red-200">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="font-extrabold text-red-950">#{c.id} — {c.userName}</span>
+                      <span className="text-[10px] font-bold bg-red-100 text-red-800 px-2 py-0.5 rounded-full">
+                        CANCELLED BY CUSTOMER
+                      </span>
+                    </div>
+                    <p className="text-red-800 text-[11px] font-medium">
+                      📍 {c.pickupAddress} • 📞 +91 {c.userPhone}
+                    </p>
+                    <p className="text-red-700 text-[11px] font-semibold">
+                      Reason: {c.cancellationReason || 'Customer cancelled request'}
+                    </p>
+                  </div>
+
+                  <div className="text-right">
+                    <span className="text-[10px] text-red-800 font-bold block">{c.cancelledAt || c.createdAt}</span>
+                    <span className="text-[10px] text-brand-text-secondary">Order terminated</span>
                   </div>
                 </div>
               ))}

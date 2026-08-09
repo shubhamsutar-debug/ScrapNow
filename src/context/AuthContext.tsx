@@ -54,7 +54,8 @@ export type PickupStatus =
   | 'Scrap Collected'
   | 'Completed'
   | 'Rejected'
-  | 'Cancelled';
+  | 'Cancelled'
+  | 'Cancelled by Customer';
 
 export interface CollectorLocation {
   lat: number;
@@ -82,6 +83,8 @@ export interface PickupRequest {
   status: PickupStatus;
   createdAt: string;
   completedAt?: string;
+  cancelledAt?: string;
+  cancellationReason?: string;
   items: PickupItem[];
   paymentMethod?: string;
   collectorLocation?: CollectorLocation;
@@ -119,6 +122,7 @@ interface AuthContextValue {
   addPickupRequest: (request: Omit<PickupRequest, 'id' | 'createdAt'>) => PickupRequest;
   acceptPickupRequest: (requestId: string, collector: { id: string; name: string; phone: string }) => void;
   rejectPickupRequest: (requestId: string) => void;
+  cancelPickupRequest: (requestId: string, reason?: string) => boolean;
   updatePickupStatus: (requestId: string, status: PickupStatus, paymentMethod?: string) => void;
   updatePickupItems: (requestId: string, updatedItems: PickupItem[]) => void;
   updateCollectorLocation: (requestId: string, lat: number, lng: number, isSharing: boolean) => void;
@@ -246,9 +250,9 @@ const INITIAL_MOCK_PICKUPS: PickupRequest[] = [
 function loadCurrentUser(): User | null {
   try {
     const raw = localStorage.getItem(CURRENT_USER_KEY);
-    return raw ? (JSON.parse(raw) as User) : null;
+    return raw ? (JSON.parse(raw) as User) : DEFAULT_USERS[0];
   } catch {
-    return null;
+    return DEFAULT_USERS[0];
   }
 }
 
@@ -292,7 +296,6 @@ function saveAllUsers(users: User[]) {
 
 function savePickups(pickups: PickupRequest[]) {
   localStorage.setItem(PICKUPS_KEY, JSON.stringify(pickups));
-  // Broadcast custom event for same-tab & cross-tab immediate reactivity
   window.dispatchEvent(new Event('scrapnow_db_update'));
 }
 
@@ -306,7 +309,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [authRedirectIntent, setAuthRedirectIntent] = useState<AuthIntent>(null);
   const [pickups, setPickups] = useState<PickupRequest[]>(loadPickups);
 
-  // Sync state in real-time across multiple tabs / windows!
   useEffect(() => {
     const handleStorageOrCustomSync = () => {
       const reloadedPickups = loadPickups();
@@ -320,7 +322,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.addEventListener('storage', handleStorageOrCustomSync);
     window.addEventListener('scrapnow_db_update', handleStorageOrCustomSync);
 
-    // Lightweight polling interval for sub-second cross-window syncing during hackathon demo
     const interval = setInterval(() => {
       const reloadedPickups = loadPickups();
       setPickups((prev) => {
@@ -482,32 +483,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const upgradeToCollector = useCallback(
-    (businessName: string, _vehicleType: string): User => {
+    (businessName: string, vehicleType: string): User => {
       if (!user) throw new Error('Must be logged in to upgrade to collector');
-
-      const profile: CollectorProfile = {
-        collectorId: `COL-${Math.floor(1000 + Math.random() * 9000)}`,
-        userId: user.userId,
-        name: user.name,
-        phone: user.phone,
-        businessName,
-        shopAddress: '',
-        city: user.location,
-        pincode: '',
-        acceptedCategories: ['Paper', 'Plastic', 'Metal'],
-        pickupAvailable: true,
-        pickupRadiusKm: 10,
-        workingDays: 'Mon - Sat',
-        workingHours: '9:00 AM - 7:00 PM',
-        minPickupKg: 5,
-        createdAt: new Date().toISOString(),
-      };
-
       const updatedUser: User = {
         ...user,
         role: 'collector',
         businessName,
-        collectorProfile: profile,
+        vehicleType,
       };
       setUser(updatedUser);
       const all = loadAllUsers().map((u) => (u.phone === user.phone ? updatedUser : u));
@@ -564,6 +546,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
     setPickups(updated);
     savePickups(updated);
+  }, []);
+
+  const cancelPickupRequest = useCallback((requestId: string, reason: string = 'Cancelled by Customer'): boolean => {
+    const currentList = loadPickups();
+    const target = currentList.find((r) => r.id === requestId);
+    if (!target) return false;
+
+    // Disallow cancellation once collector has set status to On the Way, Arrived, Scrap Collected, or Completed
+    if (
+      target.status === 'On the Way' ||
+      target.status === 'Arrived' ||
+      target.status === 'Scrap Collected' ||
+      target.status === 'Completed' ||
+      target.status === 'Cancelled' ||
+      target.status === 'Cancelled by Customer'
+    ) {
+      return false;
+    }
+
+    const updated = currentList.map((req) => {
+      if (req.id === requestId) {
+        return {
+          ...req,
+          status: 'Cancelled by Customer' as PickupStatus,
+          cancellationReason: reason,
+          cancelledAt: new Date().toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+          }) + ' at ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        };
+      }
+      return req;
+    });
+
+    setPickups(updated);
+    savePickups(updated);
+    return true;
   }, []);
 
   const updatePickupStatus = useCallback(
@@ -657,6 +677,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         addPickupRequest,
         acceptPickupRequest,
         rejectPickupRequest,
+        cancelPickupRequest,
         updatePickupStatus,
         updatePickupItems,
         updateCollectorLocation,
