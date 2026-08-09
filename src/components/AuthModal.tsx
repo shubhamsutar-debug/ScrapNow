@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import logoImg from '../assets/images/logo.png';
 import authIllustration from '../assets/images/auth-illustration.jpg';
@@ -18,6 +19,7 @@ function formatPhone(phone: string): string {
 }
 
 export default function AuthModal() {
+  const navigate = useNavigate();
   const {
     isAuthModalOpen,
     authRedirectIntent,
@@ -26,6 +28,7 @@ export default function AuthModal() {
     isExistingUser,
     registerUser,
   } = useAuth();
+
 
   const [step, setStep] = useState<AuthStep>('phone');
   const [phone, setPhone] = useState('');
@@ -46,7 +49,7 @@ export default function AuthModal() {
 
   // Timer tick for OTP step
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: ReturnType<typeof setInterval>;
     if (step === 'otp' && timer > 0) {
       interval = setInterval(() => {
         setTimer((prev) => prev - 1);
@@ -166,7 +169,7 @@ export default function AuthModal() {
       login(existing);
       closeAuthModal();
       if (authRedirectIntent === 'sell-scrap') {
-        setTimeout(() => alert(`Welcome back, ${existing.name}! Ready to sell scrap.`), 200);
+        navigate('/sell-scrap');
       }
     } else {
       setStep('profile');
@@ -187,7 +190,7 @@ export default function AuthModal() {
     login(newUser);
     closeAuthModal();
     if (authRedirectIntent === 'sell-scrap') {
-      setTimeout(() => alert(`Profile created! Welcome to ScrapNow, ${newUser.name}.`), 200);
+      navigate('/sell-scrap');
     }
   };
 

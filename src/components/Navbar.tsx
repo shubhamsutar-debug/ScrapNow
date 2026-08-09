@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import logoImg from '../assets/images/logo.png';
 import { useAuth } from '../context/AuthContext';
+import { useCity } from '../context/CityContext';
+import CitySelector from './CitySelector';
 
 type NavLink = {
   label: string;
@@ -23,6 +25,7 @@ const Navbar: React.FC = () => {
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   const { user, openAuthModal, logout } = useAuth();
+  const { selectedCity, setSelectedCity } = useCity();
 
   // Track active section using IntersectionObserver
   useEffect(() => {
@@ -123,38 +126,11 @@ const Navbar: React.FC = () => {
           {/* Right: Desktop Actions */}
           <div className="hidden md:flex items-center space-x-4">
             {/* Location Pill */}
-            <div className="flex items-center space-x-1 px-3 py-1.5 bg-brand-bg rounded-full cursor-pointer hover:bg-brand-light transition-colors group">
-              <svg
-                className="w-4 h-4 text-brand-primary"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-                />
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-                />
-              </svg>
-              <span className="text-sm font-medium text-brand-text-secondary group-hover:text-brand-primary transition-colors">
-                Pune
-              </span>
-              <svg
-                className="w-4 h-4 text-brand-text-secondary group-hover:text-brand-primary transition-colors"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
+            <CitySelector
+              variant="compact"
+              selectedCity={selectedCity}
+              onCityChange={setSelectedCity}
+            />
 
             {/* Auth: Single button or logged-in user */}
             {user ? (
@@ -251,12 +227,12 @@ const Navbar: React.FC = () => {
             })}
 
             <div className="pt-4 pb-2 border-t border-brand-border mt-4">
-              <div className="flex items-center px-3 py-2 mb-4 space-x-2 text-brand-text-secondary">
-                <svg className="w-5 h-5 text-brand-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                <span className="font-medium text-base">Pune</span>
+              <div className="flex items-center px-3 py-2 mb-4">
+                <CitySelector
+                  variant="full"
+                  selectedCity={selectedCity}
+                  onCityChange={setSelectedCity}
+                />
               </div>
 
               <div className="flex flex-col space-y-3 px-3">

@@ -1,15 +1,18 @@
+import { useNavigate } from 'react-router-dom';
 import heroImage from '../assets/images/hero-recycling.jpg';
 import { useAuth } from '../context/AuthContext';
+import { useCity } from '../context/CityContext';
+import CitySelector from './CitySelector';
 
 const Hero = () => {
   const { user, openAuthModal } = useAuth();
+  const { selectedCity, setSelectedCity } = useCity();
+  const navigate = useNavigate();
 
   const handleSellScrap = () => {
     if (user) {
-      // User is logged in — placeholder for future sell scrap flow
-      alert(`Hi ${user.name}! Sell Scrap flow coming soon.`);
+      navigate('/sell-scrap');
     } else {
-      // Not logged in — trigger auth with sell-scrap intent
       openAuthModal('sell-scrap');
     }
   };
@@ -33,16 +36,13 @@ const Hero = () => {
           </p>
           
           {/* Location Selector */}
-          <button className="mt-6 bg-brand-card border border-brand-border rounded-full px-4 py-2.5 inline-flex items-center gap-2 hover:bg-gray-50 transition cursor-pointer">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-brand-primary">
-              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-              <circle cx="12" cy="10" r="3"></circle>
-            </svg>
-            <span className="text-brand-text font-medium text-sm">Pune, Maharashtra</span>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-brand-text-secondary">
-              <polyline points="6 9 12 15 18 9"></polyline>
-            </svg>
-          </button>
+          <div className="mt-6">
+            <CitySelector
+              variant="full"
+              selectedCity={selectedCity}
+              onCityChange={setSelectedCity}
+            />
+          </div>
           
           {/* CTA Buttons */}
           <div className="mt-6 flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
@@ -54,7 +54,7 @@ const Hero = () => {
               </svg>
             </button>
             <a href="#scrap-prices" className="bg-brand-card border border-brand-border text-brand-text font-medium px-7 py-3 rounded-lg hover:bg-gray-50 transition w-full sm:w-auto text-center inline-flex justify-center items-center">
-              View All Prices
+              Check Rate List
             </a>
           </div>
           
