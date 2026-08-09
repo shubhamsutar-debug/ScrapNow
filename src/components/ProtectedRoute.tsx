@@ -1,0 +1,23 @@
+import React, { useEffect } from 'react';
+import { Navigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+}
+
+export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
+  const { user, openAuthModal } = useAuth();
+
+  useEffect(() => {
+    if (!user) {
+      openAuthModal();
+    }
+  }, [user, openAuthModal]);
+
+  if (!user) {
+    return <Navigate to="/" replace />;
+  }
+
+  return <>{children}</>;
+};

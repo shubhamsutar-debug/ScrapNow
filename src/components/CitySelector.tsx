@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 export const CITIES = [
   'Pune',
@@ -30,6 +31,7 @@ const CitySelector: React.FC<CitySelectorProps> = ({
   selectedCity,
   onCityChange,
 }) => {
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const ref = useRef<HTMLDivElement>(null);
@@ -120,7 +122,7 @@ const CitySelector: React.FC<CitySelectorProps> = ({
 
       {/* Dropdown */}
       {open && (
-        <div className="absolute left-0 top-full mt-2 w-56 bg-brand-card border border-brand-border rounded-xl shadow-lg z-50 overflow-hidden">
+        <div className="absolute left-0 top-full mt-2 w-60 bg-brand-card border border-brand-border rounded-xl shadow-lg z-50 overflow-hidden">
           {/* Search */}
           <div className="px-3 pt-3 pb-2">
             <div className="relative">
@@ -148,7 +150,7 @@ const CitySelector: React.FC<CitySelectorProps> = ({
           {/* City list */}
           <ul
             role="listbox"
-            className="max-h-52 overflow-y-auto py-1"
+            className="max-h-44 overflow-y-auto py-1"
           >
             {filtered.length > 0 ? (
               filtered.map((city) => (
@@ -181,6 +183,19 @@ const CitySelector: React.FC<CitySelectorProps> = ({
               </li>
             )}
           </ul>
+
+          {/* View All Cities Page Action */}
+          <div className="p-2 border-t border-brand-border bg-brand-bg">
+            <button
+              onClick={() => {
+                setOpen(false);
+                navigate('/select-city');
+              }}
+              className="w-full py-1.5 text-center text-xs font-bold text-brand-primary hover:underline cursor-pointer"
+            >
+              Browse All Cities Page →
+            </button>
+          </div>
         </div>
       )}
     </div>

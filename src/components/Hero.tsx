@@ -53,9 +53,12 @@ const Hero = () => {
                 <polyline points="12 5 19 12 12 19"></polyline>
               </svg>
             </button>
-            <a href="#scrap-prices" className="bg-brand-card border border-brand-border text-brand-text font-medium px-7 py-3 rounded-lg hover:bg-gray-50 transition w-full sm:w-auto text-center inline-flex justify-center items-center">
+            <button
+              onClick={() => navigate('/select-city')}
+              className="bg-brand-card border border-brand-border text-brand-text font-medium px-7 py-3 rounded-lg hover:bg-gray-50 transition w-full sm:w-auto text-center inline-flex justify-center items-center cursor-pointer"
+            >
               Check Rate List
-            </a>
+            </button>
           </div>
           
           {/* Benefit Badges */}

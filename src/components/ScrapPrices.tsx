@@ -1,8 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import ScrapCard from './ScrapCard';
-import { scrapItems, categories, type ScrapItem } from '../data/scrapItems';
+import { getScrapItemsForCity, categories, type ScrapItem } from '../data/scrapItems';
+import { useCity } from '../context/CityContext';
 
 const ScrapPrices = () => {
+  const navigate = useNavigate();
+  const { selectedCity } = useCity();
   const [activeCategory, setActiveCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -10,7 +14,9 @@ const ScrapPrices = () => {
   
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const filteredItems = scrapItems.filter((item: ScrapItem) => {
+  const cityItems = getScrapItemsForCity(selectedCity);
+
+  const filteredItems = cityItems.filter((item: ScrapItem) => {
     const matchesCategory = activeCategory === 'All' || item.category === activeCategory;
     const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCategory && matchesSearch;
@@ -45,8 +51,11 @@ const ScrapPrices = () => {
       <div className="max-w-7xl mx-auto">
         {/* Header Row */}
         <div className="flex justify-between items-center flex-wrap gap-4 mb-8">
-          <h2 className="text-2xl md:text-3xl font-bold text-brand-text flex items-center gap-2">
-            Today's Scrap Prices in <span className="text-brand-primary">Pune</span>
+          <h2 
+            onClick={() => navigate('/select-city')}
+            className="text-2xl md:text-3xl font-bold text-brand-text flex items-center gap-2 cursor-pointer group"
+          >
+            Today's Scrap Prices in <span className="text-brand-primary group-hover:underline">{selectedCity}</span>
             <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-brand-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
             </svg>
@@ -129,8 +138,9 @@ const ScrapPrices = () => {
 
           {canScrollRight && (
             <button 
-              onClick={() => scroll('right')}
+              onClick={() => navigate('/select-city')}
               className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-10 bg-brand-card shadow-lg border border-brand-border w-10 h-10 rounded-full hidden md:flex items-center justify-center hover:bg-brand-light transition text-brand-text"
+              title="Select City"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />

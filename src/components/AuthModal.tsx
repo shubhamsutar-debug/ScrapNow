@@ -170,6 +170,8 @@ export default function AuthModal() {
       closeAuthModal();
       if (authRedirectIntent === 'sell-scrap') {
         navigate('/sell-scrap');
+      } else {
+        navigate('/dashboard');
       }
     } else {
       setStep('profile');
@@ -191,6 +193,8 @@ export default function AuthModal() {
     closeAuthModal();
     if (authRedirectIntent === 'sell-scrap') {
       navigate('/sell-scrap');
+    } else {
+      navigate('/dashboard');
     }
   };
 
