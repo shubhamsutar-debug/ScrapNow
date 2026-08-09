@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+/* ═══════════════════════════════════════════════════
+   ScrapNow Design System — Tailwind CSS v4 Theme
+   ═══════════════════════════════════════════════════ */
+
+@theme {
+  /* ── Colors ── */
+  --color-brand-primary: #16A34A;
+  --color-brand-dark: #166534;
+  --color-brand-light: #DCFCE7;
+  --color-brand-bg: #F8FAF9;
+  --color-brand-card: #FFFFFF;
+  --color-brand-text: #17211B;
+  --color-brand-text-secondary: #66736B;
+  --color-brand-accent: #F59E0B;
+  --color-brand-border: #E5E7EB;
+
+  /* ── Font Family ── */
+  --font-sans: 'Poppins', ui-sans-serif, system-ui, sans-serif;
+
+  /* ── Border Radius ── */
+  --radius-card: 12px;
+  --radius-btn: 8px;
+  --radius-pill: 999px;
+  --radius-input: 10px;
+}
+
+/* ═══════════════════════════════════════════════════
+   Base Styles
+   ═══════════════════════════════════════════════════ */
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--color-brand-text);
+  background-color: var(--color-brand-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ═══════════════════════════════════════════════════
+   Scrollbar (price cards horizontal scroll)
+   ═══════════════════════════════════════════════════ */
+
+.scrap-scroll::-webkit-scrollbar {
+  height: 6px;
+}
+.scrap-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrap-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-brand-border);
+  border-radius: 999px;
+}
+.scrap-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--color-brand-text-secondary);
+}
+
+/* Firefox */
+.scrap-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-brand-border) transparent;
+}
