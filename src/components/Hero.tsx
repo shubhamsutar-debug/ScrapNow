@@ -102,7 +102,7 @@ const Hero = () => {
             <img 
               src={heroImage} 
               alt="Recycling scrap for value" 
-              className="w-full h-auto object-cover aspect-[4/3] sm:aspect-[3/4] md:aspect-[4/3] lg:aspect-square"
+              className="w-full h-auto object-cover object-top aspect-[4/3] lg:aspect-square"
             />
           </div>
         </div>
