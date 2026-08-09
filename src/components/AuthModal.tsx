@@ -170,11 +170,20 @@ export default function AuthModal() {
       closeAuthModal();
       if (authRedirectIntent === 'sell-scrap') {
         navigate('/sell-scrap');
+      } else if (authRedirectIntent === 'collector-register') {
+        navigate('/collector/register');
+      } else if (existing.role === 'collector') {
+        navigate('/collector/dashboard');
       } else {
         navigate('/dashboard');
       }
     } else {
-      setStep('profile');
+      if (authRedirectIntent === 'collector-register') {
+        closeAuthModal();
+        navigate('/collector/register');
+      } else {
+        setStep('profile');
+      }
     }
   };
 

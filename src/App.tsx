@@ -6,6 +6,8 @@ import SelectCity from './pages/SelectCity';
 import ScrapPricesPage from './pages/ScrapPricesPage';
 import MyPickups from './pages/MyPickups';
 import MySales from './pages/MySales';
+import CollectorRegister from './pages/CollectorRegister';
+import CollectorDashboard from './pages/CollectorDashboard';
 import { ProtectedRoute } from './components/ProtectedRoute';
 
 function App() {
@@ -15,6 +17,9 @@ function App() {
       <Route path="/" element={<Home />} />
       <Route path="/select-city" element={<SelectCity />} />
       <Route path="/scrap-prices" element={<ScrapPricesPage />} />
+
+      {/* Collector Registration Flow */}
+      <Route path="/collector/register" element={<CollectorRegister />} />
 
       {/* Authenticated Customer Routes */}
       <Route
@@ -46,6 +51,16 @@ function App() {
         element={
           <ProtectedRoute>
             <MySales />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Authenticated Collector Routes */}
+      <Route
+        path="/collector/dashboard"
+        element={
+          <ProtectedRoute requiredRole="collector">
+            <CollectorDashboard />
           </ProtectedRoute>
         }
       />

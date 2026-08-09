@@ -12,7 +12,24 @@ export interface User {
   createdAt: string;
   role: UserRole;
   businessName?: string;
-  vehicleType?: string;
+  collectorProfile?: CollectorProfile;
+}
+
+export interface CollectorProfile {
+  collectorId: string;
+  name: string;
+  phone: string;
+  businessName: string;
+  shopAddress: string;
+  city: string;
+  pincode: string;
+  acceptedCategories: string[];
+  pickupAvailable: boolean;
+  pickupRadiusKm: number;
+  workingDays: string;
+  workingHours: string;
+  minPickupKg: number;
+  createdAt: string;
 }
 
 export interface PickupItem {
@@ -23,6 +40,17 @@ export interface PickupItem {
   pricePerKg: number;
   amount: number;
 }
+
+export type PickupStatus =
+  | 'Pending Pickup'
+  | 'Accepted'
+  | 'Collector Confirmed'
+  | 'On the Way'
+  | 'Arrived'
+  | 'Scrap Collected'
+  | 'Completed'
+  | 'Rejected'
+  | 'Cancelled';
 
 export interface PickupRequest {
   id: string;
@@ -37,14 +65,14 @@ export interface PickupRequest {
   pickupAddress: string;
   timeSlot: string;
   estimatedValue: number;
-  status: 'Collector Confirmed' | 'Pending Pickup' | 'In Progress' | 'Completed' | 'Cancelled';
+  status: PickupStatus;
   createdAt: string;
   completedAt?: string;
   items: PickupItem[];
   paymentMethod?: string;
 }
 
-export type AuthIntent = 'sell-scrap' | null;
+export type AuthIntent = 'sell-scrap' | 'collector-register' | null;
 
 interface AuthContextValue {
   user: User | null;
@@ -56,9 +84,27 @@ interface AuthContextValue {
   login: (user: User) => void;
   logout: () => void;
   isExistingUser: (phone: string) => User | null;
-  registerUser: (phone: string, name: string) => User;
+  registerUser: (phone: string, name: string, role?: UserRole) => User;
+  registerCollector: (collectorData: {
+    name: string;
+    phone: string;
+    businessName: string;
+    shopAddress: string;
+    city: string;
+    pincode: string;
+    acceptedCategories: string[];
+    pickupAvailable: boolean;
+    pickupRadiusKm: number;
+    workingDays: string;
+    workingHours: string;
+    minPickupKg: number;
+  }) => User;
+  updateCollectorProfile: (data: Partial<CollectorProfile>) => void;
   upgradeToCollector: (businessName: string, vehicleType: string) => User;
   addPickupRequest: (request: Omit<PickupRequest, 'id' | 'createdAt'>) => PickupRequest;
+  acceptPickupRequest: (requestId: string, collectorName: string) => void;
+  rejectPickupRequest: (requestId: string) => void;
+  updatePickupStatus: (requestId: string, status: PickupStatus, paymentMethod?: string) => void;
 }
 
 // ─── Storage Keys ────────────────────────────────────────────────────────────
@@ -67,9 +113,69 @@ const CURRENT_USER_KEY = 'scrapnow_user';
 const ALL_USERS_KEY = 'scrapnow_users';
 const PICKUPS_KEY = 'scrapnow_pickups';
 
-// ─── Initial Mock Pickups for Demo ──────────────────────────────────────────
+// ─── Initial Mock Pickups for Shared State ─────────────────────────────────
 
 const INITIAL_MOCK_PICKUPS: PickupRequest[] = [
+  {
+    id: 'SN-1024',
+    userId: 'cust-101',
+    userName: 'Ramesh Kumar',
+    userPhone: '9822012345',
+    collectorId: 'col-1',
+    collectorName: 'Raj Scrap Center',
+    collectorRating: 4.8,
+    collectorDistance: '1.2 km away',
+    collectorAddress: 'Kothrud, Pune',
+    pickupAddress: 'Ideal Colony, Kothrud, Pune',
+    timeSlot: 'Today, 4:00 PM',
+    estimatedValue: 280,
+    status: 'Pending Pickup',
+    createdAt: new Date().toISOString(),
+    items: [
+      { id: 'newspaper', name: 'Newspaper', category: 'Paper', weightKg: 10, pricePerKg: 11, amount: 110 },
+      { id: 'mix-plastic', name: 'Mix Plastic', category: 'Plastic', weightKg: 8, pricePerKg: 10, amount: 80 },
+      { id: 'iron', name: 'Iron', category: 'Metal', weightKg: 4, pricePerKg: 23, amount: 90 },
+    ],
+  },
+  {
+    id: 'SN-1025',
+    userId: 'cust-102',
+    userName: 'Priya Sharma',
+    userPhone: '9890123456',
+    collectorId: 'col-1',
+    collectorName: 'Raj Scrap Center',
+    collectorRating: 4.8,
+    collectorDistance: '2.5 km away',
+    collectorAddress: 'Baner, Pune',
+    pickupAddress: 'High Street, Baner, Pune',
+    timeSlot: 'Tomorrow, 10:30 AM',
+    estimatedValue: 450,
+    status: 'Pending Pickup',
+    createdAt: new Date().toISOString(),
+    items: [
+      { id: 'aluminium', name: 'Aluminium', category: 'Metal', weightKg: 2, pricePerKg: 150, amount: 300 },
+      { id: 'newspaper', name: 'Newspaper', category: 'Paper', weightKg: 13, pricePerKg: 11, amount: 143 },
+    ],
+  },
+  {
+    id: 'SN-1026',
+    userId: 'cust-103',
+    userName: 'Amit Patil',
+    userPhone: '9765432109',
+    collectorId: 'col-1',
+    collectorName: 'Raj Scrap Center',
+    collectorRating: 4.8,
+    collectorDistance: '0.8 km away',
+    collectorAddress: 'Kothrud, Pune',
+    pickupAddress: 'Paud Road, Kothrud, Pune',
+    timeSlot: 'Today, 6:00 PM',
+    estimatedValue: 620,
+    status: 'Pending Pickup',
+    createdAt: new Date().toISOString(),
+    items: [
+      { id: 'copper', name: 'Copper Wire', category: 'Metal', weightKg: 1, pricePerKg: 620, amount: 620 },
+    ],
+  },
   {
     id: 'SN-402910',
     userId: 'demo-user-1',
@@ -83,7 +189,7 @@ const INITIAL_MOCK_PICKUPS: PickupRequest[] = [
     pickupAddress: 'Paud Road, Kothrud, Pune, Maharashtra - 411038',
     timeSlot: 'Tomorrow • 10:30 AM',
     estimatedValue: 420,
-    status: 'Collector Confirmed',
+    status: 'Accepted',
     createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
     items: [
       { id: 'newspaper', name: 'Newspaper', category: 'Paper', weightKg: 10, pricePerKg: 26, amount: 260 },
@@ -93,43 +199,22 @@ const INITIAL_MOCK_PICKUPS: PickupRequest[] = [
   {
     id: 'SN-391024',
     userId: 'demo-user-1',
-    userName: 'Shubham Sutar',
-    userPhone: '9876543210',
-    collectorId: 'col-2',
-    collectorName: 'GreenCycle Pune Mart',
-    collectorRating: 4.9,
-    collectorDistance: '2.1 km away',
-    collectorAddress: 'Viman Nagar, Pune',
-    pickupAddress: 'Paud Road, Kothrud, Pune, Maharashtra - 411038',
-    timeSlot: 'Completed on Aug 8',
-    estimatedValue: 130,
+    userName: 'Rahul Verma',
+    userPhone: '9876500000',
+    collectorId: 'col-1',
+    collectorName: 'Raj Scrap Center',
+    collectorRating: 4.8,
+    collectorDistance: '1.5 km away',
+    collectorAddress: 'Kothrud, Pune',
+    pickupAddress: 'FC Road, Pune',
+    timeSlot: 'Aug 8, 2026',
+    estimatedValue: 420,
     status: 'Completed',
-    createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
+    createdAt: new Date(Date.now() - 86400000 * 1).toISOString(),
     completedAt: 'Aug 8, 2026',
-    paymentMethod: 'UPI',
-    items: [
-      { id: 'plastic-bottles', name: 'Plastic Bottles', category: 'Plastic', weightKg: 5, pricePerKg: 26, amount: 130 },
-    ],
-  },
-  {
-    id: 'SN-281940',
-    userId: 'demo-user-1',
-    userName: 'Shubham Sutar',
-    userPhone: '9876543210',
-    collectorId: 'col-3',
-    collectorName: 'EcoScrap Traders',
-    collectorRating: 4.6,
-    collectorDistance: '3.4 km away',
-    collectorAddress: 'Hadapsar, Pune',
-    pickupAddress: 'Paud Road, Kothrud, Pune, Maharashtra - 411038',
-    timeSlot: 'Completed on Aug 5',
-    estimatedValue: 208,
-    status: 'Completed',
-    createdAt: new Date(Date.now() - 86400000 * 6).toISOString(),
-    completedAt: 'Aug 5, 2026',
     paymentMethod: 'Cash',
     items: [
-      { id: 'newspaper', name: 'Newspaper', category: 'Paper', weightKg: 8, pricePerKg: 26, amount: 208 },
+      { id: 'paper-mix', name: 'Paper + Plastic', category: 'Paper', weightKg: 24, pricePerKg: 17.5, amount: 420 },
     ],
   },
 ];
@@ -222,14 +307,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return all.find((u) => u.phone === phone) ?? null;
   }, []);
 
-  const registerUser = useCallback((phone: string, name: string): User => {
+  const registerUser = useCallback((phone: string, name: string, role: UserRole = 'user'): User => {
     const newUser: User = {
       userId: crypto.randomUUID(),
       name,
       phone,
       location: 'Pune',
       createdAt: new Date().toISOString(),
-      role: 'user',
+      role,
     };
     const all = loadAllUsers();
     all.push(newUser);
@@ -237,29 +322,176 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return newUser;
   }, []);
 
-  const upgradeToCollector = useCallback((businessName: string, vehicleType: string): User => {
-    if (!user) throw new Error('Must be logged in to upgrade to collector');
-    const updatedUser: User = {
-      ...user,
-      role: 'collector',
-      businessName,
-      vehicleType,
-    };
-    setUser(updatedUser);
-    const all = loadAllUsers().map((u) => (u.phone === user.phone ? updatedUser : u));
-    saveAllUsers(all);
-    return updatedUser;
-  }, [user]);
+  const registerCollector = useCallback(
+    (collectorData: {
+      name: string;
+      phone: string;
+      businessName: string;
+      shopAddress: string;
+      city: string;
+      pincode: string;
+      acceptedCategories: string[];
+      pickupAvailable: boolean;
+      pickupRadiusKm: number;
+      workingDays: string;
+      workingHours: string;
+      minPickupKg: number;
+    }): User => {
+      const all = loadAllUsers();
+      const existing = all.find((u) => u.phone === collectorData.phone);
+
+      const profile: CollectorProfile = {
+        collectorId: `COL-${Math.floor(1000 + Math.random() * 9000)}`,
+        ...collectorData,
+        createdAt: new Date().toISOString(),
+      };
+
+      let updatedUser: User;
+
+      if (existing) {
+        updatedUser = {
+          ...existing,
+          role: 'collector',
+          businessName: collectorData.businessName,
+          collectorProfile: profile,
+        };
+        const updatedAll = all.map((u) => (u.phone === collectorData.phone ? updatedUser : u));
+        saveAllUsers(updatedAll);
+      } else {
+        updatedUser = {
+          userId: crypto.randomUUID(),
+          name: collectorData.name,
+          phone: collectorData.phone,
+          location: collectorData.city,
+          createdAt: new Date().toISOString(),
+          role: 'collector',
+          businessName: collectorData.businessName,
+          collectorProfile: profile,
+        };
+        all.push(updatedUser);
+        saveAllUsers(all);
+      }
+
+      setUser(updatedUser);
+      return updatedUser;
+    },
+    []
+  );
+
+  const updateCollectorProfile = useCallback(
+    (data: Partial<CollectorProfile>) => {
+      if (!user || user.role !== 'collector') return;
+      const currentProf = user.collectorProfile || {
+        collectorId: `COL-1001`,
+        name: user.name,
+        phone: user.phone,
+        businessName: user.businessName || `${user.name} Scrap Center`,
+        shopAddress: 'Kothrud, Pune',
+        city: 'Pune',
+        pincode: '411038',
+        acceptedCategories: ['Paper', 'Plastic', 'Metal'],
+        pickupAvailable: true,
+        pickupRadiusKm: 10,
+        workingDays: 'Mon - Sat',
+        workingHours: '9:00 AM - 7:00 PM',
+        minPickupKg: 5,
+        createdAt: new Date().toISOString(),
+      };
+
+      const updatedProfile: CollectorProfile = {
+        ...currentProf,
+        ...data,
+      };
+
+      const updatedUser: User = {
+        ...user,
+        name: data.name || user.name,
+        phone: data.phone || user.phone,
+        businessName: data.businessName || user.businessName,
+        collectorProfile: updatedProfile,
+      };
+
+      setUser(updatedUser);
+      const all = loadAllUsers().map((u) => (u.userId === user.userId ? updatedUser : u));
+      saveAllUsers(all);
+    },
+    [user]
+  );
+
+  const upgradeToCollector = useCallback(
+    (businessName: string, vehicleType: string): User => {
+      if (!user) throw new Error('Must be logged in to upgrade to collector');
+      const updatedUser: User = {
+        ...user,
+        role: 'collector',
+        businessName,
+        vehicleType,
+      };
+      setUser(updatedUser);
+      const all = loadAllUsers().map((u) => (u.phone === user.phone ? updatedUser : u));
+      saveAllUsers(all);
+      return updatedUser;
+    },
+    [user]
+  );
 
   const addPickupRequest = useCallback(
     (reqData: Omit<PickupRequest, 'id' | 'createdAt'>): PickupRequest => {
       const newReq: PickupRequest = {
         ...reqData,
-        id: `SN-${Math.floor(100000 + Math.random() * 900000)}`,
+        id: `SN-${Math.floor(1000 + Math.random() * 9000)}`,
         createdAt: new Date().toISOString(),
       };
       setPickups((prev) => [newReq, ...prev]);
       return newReq;
+    },
+    []
+  );
+
+  const acceptPickupRequest = useCallback((requestId: string, collectorName: string) => {
+    setPickups((prev) =>
+      prev.map((req) =>
+        req.id === requestId
+          ? { ...req, status: 'Accepted', collectorName }
+          : req
+      )
+    );
+  }, []);
+
+  const rejectPickupRequest = useCallback((requestId: string) => {
+    setPickups((prev) =>
+      prev.map((req) =>
+        req.id === requestId
+          ? { ...req, status: 'Rejected' }
+          : req
+      )
+    );
+  }, []);
+
+  const updatePickupStatus = useCallback(
+    (requestId: string, status: PickupStatus, paymentMethod: string = 'Cash') => {
+      setPickups((prev) =>
+        prev.map((req) => {
+          if (req.id === requestId) {
+            const isCompleted = status === 'Completed';
+            return {
+              ...req,
+              status,
+              ...(isCompleted
+                ? {
+                    completedAt: new Date().toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                    }),
+                    paymentMethod,
+                  }
+                : {}),
+            };
+          }
+          return req;
+        })
+      );
     },
     []
   );
@@ -277,8 +509,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         logout,
         isExistingUser,
         registerUser,
+        registerCollector,
+        updateCollectorProfile,
         upgradeToCollector,
         addPickupRequest,
+        acceptPickupRequest,
+        rejectPickupRequest,
+        updatePickupStatus,
       }}
     >
       {children}
