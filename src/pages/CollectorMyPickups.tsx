@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import CollectorNavbar from '../components/CollectorNavbar';
 import Footer from '../components/Footer';
 import {
@@ -9,10 +9,48 @@ import {
 } from '../context/AuthContext';
 
 export default function CollectorMyPickups() {
-  const { pickups, updatePickupStatus, updatePickupItems } = useAuth();
+  const { pickups, updatePickupStatus, updatePickupItems, updateCollectorLocation } = useAuth();
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [activeWatchId, setActiveWatchId] = useState<number | null>(null);
+  const [sharingReqId, setSharingReqId] = useState<string | null>(null);
 
-  // Weigh & Collect Modal State (ONLY accessible in 'Arrived' or 'Scrap Collected' states!)
+  // Toggle Geolocation Sharing for an active pickup on the way
+  const toggleLocationSharing = (req: PickupRequest) => {
+    if (sharingReqId === req.id) {
+      if (activeWatchId !== null && navigator.geolocation) {
+        navigator.geolocation.clearWatch(activeWatchId);
+      }
+      setActiveWatchId(null);
+      setSharingReqId(null);
+      updateCollectorLocation(req.id, 18.5074, 73.8077, false);
+      setToastMessage('Live location sharing disabled.');
+      setTimeout(() => setToastMessage(null), 2500);
+      return;
+    }
+
+    setSharingReqId(req.id);
+    setToastMessage('📡 Live location sharing activated for customer tracking!');
+    setTimeout(() => setToastMessage(null), 3000);
+
+    // Initial update with default Kothrud Pune coordinates
+    updateCollectorLocation(req.id, 18.5074, 73.8077, true);
+
+    if ('geolocation' in navigator) {
+      const id = navigator.geolocation.watchPosition(
+        (pos) => {
+          updateCollectorLocation(req.id, pos.coords.latitude, pos.coords.longitude, true);
+        },
+        (err) => {
+          console.warn('Browser geolocation denied/unavailable, using simulation coords.', err);
+          updateCollectorLocation(req.id, 18.5080, 73.8085, true);
+        },
+        { enableHighAccuracy: true }
+      );
+      setActiveWatchId(id);
+    }
+  };
+
+  // Modal State for Scale Weighing
   const [weighingRequest, setWeighingRequest] = useState<PickupRequest | null>(null);
   const [editableItems, setEditableItems] = useState<PickupItem[]>([]);
 
@@ -28,21 +66,18 @@ export default function CollectorMyPickups() {
 
   const myCompletedPickups = pickups.filter((p) => p.status === 'Completed');
 
-  // Handle status advances strictly matching the 5-state lifecycle
+  // Handle status advances matching the 5-state lifecycle
   const handleStatusAdvance = (req: PickupRequest) => {
-    let nextStatus: PickupStatus = 'On the Way';
-
     if (req.status === 'Accepted' || req.status === 'Collector Confirmed') {
-      nextStatus = 'On the Way';
-      updatePickupStatus(req.id, nextStatus, 'Cash');
+      updatePickupStatus(req.id, 'On the Way', 'Cash');
       setToastMessage(`🚗 Pickup #${req.id} started! Status: On the Way`);
     } else if (req.status === 'On the Way') {
-      nextStatus = 'Arrived';
-      updatePickupStatus(req.id, nextStatus, 'Cash');
+      updatePickupStatus(req.id, 'Arrived', 'Cash');
       setToastMessage(`📍 Arrived at customer address for #${req.id}!`);
     } else if (req.status === 'Arrived') {
-      // Transition to Weigh & Collect state and open Weighing Modal
-      handleOpenWeighingModal(req);
+      // Transition status to 'Scrap Collected' (Weigh & Collect stage)
+      updatePickupStatus(req.id, 'Scrap Collected', 'Cash');
+      handleOpenWeighingModal({ ...req, status: 'Scrap Collected' });
       return;
     } else if (req.status === 'Scrap Collected') {
       handleOpenWeighingModal(req);
@@ -52,23 +87,72 @@ export default function CollectorMyPickups() {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  // Open Weighing & Scale Entry Modal (ONLY after reaching Arrived state)
+  // Open Weighing & Scale Entry Modal
   const handleOpenWeighingModal = (req: PickupRequest) => {
     if (req.status !== 'Arrived' && req.status !== 'Scrap Collected') {
       alert('Physical scale weighing is only allowed after arriving at customer address.');
       return;
     }
     setWeighingRequest(req);
-    // Deep clone items array for editing scale weights
-    setEditableItems(
-      req.items.map((item) => ({
-        ...item,
-      }))
-    );
+    setEditableItems(req.items.map((item) => ({ ...item })));
   };
 
-  // Modify individual item in scale state
-  const handleItemFieldChange = (
+  // Inline Card Item Weight/Price Change (preserves pickupStatus!)
+  const handleInlineItemChange = (
+    requestId: string,
+    currentItems: PickupItem[],
+    index: number,
+    field: keyof PickupItem,
+    value: string | number
+  ) => {
+    const updated = currentItems.map((item, idx) => {
+      if (idx === index) {
+        const copy = { ...item };
+        if (field === 'weightKg' || field === 'pricePerKg') {
+          const num = parseFloat(value as string);
+          const safe = isNaN(num) || num < 0 ? 0 : num;
+          (copy as any)[field] = safe;
+          copy.amount = Math.round(copy.weightKg * copy.pricePerKg);
+        } else {
+          (copy as any)[field] = value;
+        }
+        return copy;
+      }
+      return item;
+    });
+
+    // Update items & recalculated value ONLY — pickupStatus remains unchanged!
+    updatePickupItems(requestId, updated);
+  };
+
+  // Inline Delete Scrap Item (preserves pickupStatus!)
+  const handleInlineDeleteItem = (requestId: string, currentItems: PickupItem[], index: number) => {
+    if (currentItems.length <= 1) {
+      alert('Please keep at least one scrap item in the list.');
+      return;
+    }
+    const updated = currentItems.filter((_, idx) => idx !== index);
+    // Update items & total ONLY — status remains 'Scrap Collected'!
+    updatePickupItems(requestId, updated);
+    setToastMessage(`Item removed. Total recalculated.`);
+    setTimeout(() => setToastMessage(null), 2500);
+  };
+
+  // Inline Add Scrap Item
+  const handleInlineAddItem = (requestId: string, currentItems: PickupItem[]) => {
+    const newItem: PickupItem = {
+      id: `item-${Date.now()}`,
+      name: 'Cardboard Box',
+      category: 'Paper',
+      weightKg: 5,
+      pricePerKg: 10,
+      amount: 50,
+    };
+    updatePickupItems(requestId, [...currentItems, newItem]);
+  };
+
+  // Modal Item Field Change
+  const handleModalItemFieldChange = (
     index: number,
     field: keyof PickupItem,
     value: string | number
@@ -76,7 +160,6 @@ export default function CollectorMyPickups() {
     setEditableItems((prev) => {
       const next = [...prev];
       const target = { ...next[index] };
-
       if (field === 'weightKg' || field === 'pricePerKg') {
         const numVal = parseFloat(value as string);
         const safeNum = isNaN(numVal) || numVal < 0 ? 0 : numVal;
@@ -85,14 +168,13 @@ export default function CollectorMyPickups() {
       } else {
         (target as any)[field] = value;
       }
-
       next[index] = target;
       return next;
     });
   };
 
-  // Add new item row during scale weighing
-  const handleAddItem = () => {
+  // Modal Add Item
+  const handleModalAddItem = () => {
     const newItem: PickupItem = {
       id: `item-${Date.now()}`,
       name: 'Cardboard Box',
@@ -104,33 +186,41 @@ export default function CollectorMyPickups() {
     setEditableItems((prev) => [...prev, newItem]);
   };
 
-  // Remove item row
-  const handleRemoveItem = (index: number) => {
-    setEditableItems((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  // Confirm Collection & Payment (Creates Transaction & Completes Order)
-  const handleConfirmCollectionAndPayment = () => {
-    if (!weighingRequest) return;
-
-    if (editableItems.length === 0) {
+  // Modal Remove Item
+  const handleModalRemoveItem = (index: number) => {
+    if (editableItems.length <= 1) {
       alert('Please keep at least one scrap item in the list.');
       return;
     }
+    setEditableItems((prev) => prev.filter((_, i) => i !== index));
+  };
 
-    // Save final measured scale items & recalculated total
+  // Save Modal Corrections (preserves pickupStatus!)
+  const handleSaveModalCorrections = () => {
+    if (!weighingRequest) return;
+    if (editableItems.length === 0) {
+      alert('Please keep at least one scrap item.');
+      return;
+    }
     updatePickupItems(weighingRequest.id, editableItems);
-
-    // Complete Pickup Request -> Creates Transaction & Updates Cash Paid
-    updatePickupStatus(weighingRequest.id, 'Completed', 'Cash');
-
-    setToastMessage(`🎉 Collection & Payment Confirmed for #${weighingRequest.id}! Transaction created.`);
+    setToastMessage(`✓ Scale weights updated for #${weighingRequest.id}`);
     setWeighingRequest(null);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  // Final Action: Confirm Collection & Payment
+  const handleFinalConfirmPayment = (req: PickupRequest) => {
+    if (req.items.length === 0) {
+      alert('Cannot complete pickup with 0 items.');
+      return;
+    }
+    updatePickupStatus(req.id, 'Completed', 'Cash');
+    setToastMessage(`🎉 Collection & Payment Confirmed for #${req.id}! Transaction created.`);
+    if (weighingRequest?.id === req.id) setWeighingRequest(null);
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Calculate live total during scale weighing
-  const liveRecalculatedTotal = editableItems.reduce(
+  const modalLiveTotal = editableItems.reduce(
     (sum, item) => sum + item.pricePerKg * item.weightKg,
     0
   );
@@ -146,7 +236,7 @@ export default function CollectorMyPickups() {
         </div>
       )}
 
-      {/* 4. Weigh & Collect Modal (ONLY accessible after Arrival) */}
+      {/* 4. Weigh & Collect Modal */}
       {weighingRequest && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="fixed inset-0 bg-black/60 backdrop-blur-xs" onClick={() => setWeighingRequest(null)} />
@@ -161,13 +251,13 @@ export default function CollectorMyPickups() {
 
             <div className="border-b border-brand-border pb-3">
               <span className="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-extrabold rounded-full">
-                Step 4 — Weigh & Collect (Doorstep Physical Scale)
+                Stage 4 — Weigh & Collect (Doorstep Physical Scale)
               </span>
               <h3 className="text-xl font-extrabold text-brand-text mt-1">
-                Enter Measured Scale Weights (#{weighingRequest.id})
+                Measured Scale Weights (#{weighingRequest.id})
               </h3>
               <p className="text-xs text-brand-text-secondary">
-                Enter actual physical scale measured weight for each item to compute final payout.
+                Enter scale weights. Editing or deleting items will NOT reset your pickup status.
               </p>
             </div>
 
@@ -179,12 +269,12 @@ export default function CollectorMyPickups() {
                 <p className="text-[11px] text-brand-text-secondary truncate max-w-[240px]">{weighingRequest.pickupAddress}</p>
               </div>
               <div className="text-right">
-                <span className="text-brand-text-secondary block font-semibold">Final Payout Amount:</span>
-                <span className="font-extrabold text-brand-primary text-xl">₹{liveRecalculatedTotal.toFixed(0)}</span>
+                <span className="text-brand-text-secondary block font-semibold">Recalculated Payout:</span>
+                <span className="font-extrabold text-brand-primary text-xl">₹{modalLiveTotal.toFixed(0)}</span>
               </div>
             </div>
 
-            {/* Item Scale Inputs & Breakdown */}
+            {/* Item Scale Inputs */}
             <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
               <span className="text-xs font-bold text-brand-text uppercase tracking-wider block">
                 Measured Scrap Items & Weights
@@ -196,7 +286,6 @@ export default function CollectorMyPickups() {
                   className="p-3.5 rounded-2xl border border-brand-border bg-white space-y-2.5 shadow-2xs"
                 >
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                    {/* Item Name */}
                     <div>
                       <label className="block text-[10px] font-bold text-brand-text-secondary uppercase">
                         Item Name
@@ -204,19 +293,18 @@ export default function CollectorMyPickups() {
                       <input
                         type="text"
                         value={item.name}
-                        onChange={(e) => handleItemFieldChange(idx, 'name', e.target.value)}
+                        onChange={(e) => handleModalItemFieldChange(idx, 'name', e.target.value)}
                         className="w-full p-2 text-xs font-bold text-brand-text border border-brand-border rounded-xl focus:outline-none focus:border-brand-primary"
                       />
                     </div>
 
-                    {/* Category */}
                     <div>
                       <label className="block text-[10px] font-bold text-brand-text-secondary uppercase">
                         Category
                       </label>
                       <select
                         value={item.category}
-                        onChange={(e) => handleItemFieldChange(idx, 'category', e.target.value)}
+                        onChange={(e) => handleModalItemFieldChange(idx, 'category', e.target.value)}
                         className="w-full p-2 text-xs font-semibold text-brand-text border border-brand-border rounded-xl focus:outline-none focus:border-brand-primary"
                       >
                         <option value="Paper">Paper</option>
@@ -228,7 +316,6 @@ export default function CollectorMyPickups() {
                       </select>
                     </div>
 
-                    {/* Scale Measured Weight */}
                     <div className="flex items-center gap-2">
                       <div className="flex-1">
                         <label className="block text-[10px] font-bold text-brand-text-secondary uppercase">
@@ -239,7 +326,7 @@ export default function CollectorMyPickups() {
                           step="0.5"
                           min="0.5"
                           value={item.weightKg}
-                          onChange={(e) => handleItemFieldChange(idx, 'weightKg', e.target.value)}
+                          onChange={(e) => handleModalItemFieldChange(idx, 'weightKg', e.target.value)}
                           className="w-full p-2 text-xs font-extrabold text-brand-primary border border-brand-primary rounded-xl focus:outline-none bg-brand-light/30 text-right"
                         />
                       </div>
@@ -251,7 +338,7 @@ export default function CollectorMyPickups() {
                         <input
                           type="number"
                           value={item.pricePerKg}
-                          onChange={(e) => handleItemFieldChange(idx, 'pricePerKg', e.target.value)}
+                          onChange={(e) => handleModalItemFieldChange(idx, 'pricePerKg', e.target.value)}
                           className="w-full p-2 text-xs font-bold text-brand-text border border-brand-border rounded-xl focus:outline-none"
                         />
                       </div>
@@ -259,9 +346,9 @@ export default function CollectorMyPickups() {
                       {editableItems.length > 1 && (
                         <button
                           type="button"
-                          onClick={() => handleRemoveItem(idx)}
+                          onClick={() => handleModalRemoveItem(idx)}
                           className="text-red-500 hover:text-red-700 text-sm font-bold pt-4 px-1"
-                          title="Remove Item"
+                          title="Delete Item"
                         >
                           🗑️
                         </button>
@@ -269,7 +356,6 @@ export default function CollectorMyPickups() {
                     </div>
                   </div>
 
-                  {/* Single Line Breakdown Formula */}
                   <div className="text-right text-xs pt-1 border-t border-brand-border/40 font-mono">
                     <span className="text-brand-text-secondary">{item.name}: </span>
                     <span className="font-bold text-brand-text">{item.weightKg} kg × ₹{item.pricePerKg} = </span>
@@ -280,17 +366,17 @@ export default function CollectorMyPickups() {
 
               <button
                 type="button"
-                onClick={handleAddItem}
+                onClick={handleModalAddItem}
                 className="w-full py-2.5 rounded-xl border border-dashed border-brand-primary text-brand-primary font-bold text-xs hover:bg-brand-light/50 transition cursor-pointer"
               >
                 + Add Another Scrap Item
               </button>
             </div>
 
-            {/* Total Itemized Breakdown Summary */}
-            <div className="bg-brand-bg/80 p-3.5 rounded-2xl border border-brand-border space-y-1.5 text-xs">
+            {/* Total Itemized Formula Breakdown */}
+            <div className="bg-brand-bg/80 p-3.5 rounded-2xl border border-brand-border space-y-1 text-xs">
               <div className="font-bold text-brand-text uppercase tracking-wider text-[11px] border-b pb-1">
-                Final Payout Breakdown
+                Itemized Breakdown
               </div>
               {editableItems.map((item, i) => (
                 <div key={i} className="flex justify-between font-mono">
@@ -298,19 +384,32 @@ export default function CollectorMyPickups() {
                   <span className="font-bold text-brand-text">₹{(item.weightKg * item.pricePerKg).toFixed(0)}</span>
                 </div>
               ))}
-              <div className="flex justify-between font-bold text-sm pt-1.5 border-t border-brand-border">
+              <div className="flex justify-between font-bold text-sm pt-2 border-t border-brand-border">
                 <span>Total Cash Payout:</span>
-                <span className="text-brand-primary text-base">₹{liveRecalculatedTotal.toFixed(0)}</span>
+                <span className="text-brand-primary text-base">₹{modalLiveTotal.toFixed(0)}</span>
               </div>
             </div>
 
-            {/* Confirm Collection & Payment */}
-            <button
-              onClick={handleConfirmCollectionAndPayment}
-              className="w-full py-4 rounded-xl bg-emerald-600 text-white font-extrabold text-sm hover:bg-emerald-700 transition shadow-md cursor-pointer flex items-center justify-center gap-2"
-            >
-              <span>💰 Confirm Collection & Payment</span>
-            </button>
+            {/* Modal Actions */}
+            <div className="flex flex-col sm:flex-row items-center gap-2.5 pt-2 border-t border-brand-border">
+              <button
+                onClick={handleSaveModalCorrections}
+                className="w-full sm:flex-1 py-3 rounded-xl bg-brand-card border border-brand-border text-brand-text font-bold text-xs hover:bg-brand-bg transition cursor-pointer"
+              >
+                Save Scale Corrections
+              </button>
+
+              <button
+                onClick={() => {
+                  if (!weighingRequest) return;
+                  updatePickupItems(weighingRequest.id, editableItems);
+                  handleFinalConfirmPayment(weighingRequest);
+                }}
+                className="w-full sm:flex-1 py-3 rounded-xl bg-emerald-600 text-white font-extrabold text-xs sm:text-sm hover:bg-emerald-700 transition shadow-md cursor-pointer flex items-center justify-center gap-2"
+              >
+                <span>💰 Confirm Collection & Payment</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -319,27 +418,36 @@ export default function CollectorMyPickups() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-brand-text">My Active Pickups</h1>
           <p className="text-brand-text-secondary text-xs sm:text-sm mt-0.5">
-            Follow the 5-step pickup workflow to travel, arrive, weigh scrap on physical scale, and pay customer
+            Manage active doorstep pickups. Editing or deleting items during Weigh & Collect will not reset pickup status.
           </p>
         </div>
 
         {/* Active Pickups List */}
         {myActivePickups.length > 0 ? (
-          <div className="space-y-4">
+          <div className="space-y-5">
             {myActivePickups.map((req) => {
               const currentStatus = req.status;
+              const isWeighingStage = currentStatus === 'Scrap Collected';
+              const cardTotalAmount = req.items.reduce((sum, item) => sum + item.pricePerKg * item.weightKg, 0);
 
               return (
                 <div
                   key={req.id}
-                  className="bg-brand-card border border-brand-border rounded-3xl p-6 shadow-xs space-y-5"
+                  className={`bg-brand-card border rounded-3xl p-6 shadow-xs space-y-5 transition-all ${
+                    isWeighingStage ? 'border-brand-primary ring-2 ring-brand-primary/20' : 'border-brand-border'
+                  }`}
                 >
+                  {/* Card Header */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-brand-border pb-3">
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-extrabold text-brand-text">Request #{req.id}</span>
-                        <span className="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 text-xs font-extrabold rounded-full">
-                          {currentStatus}
+                        <span
+                          className={`px-2.5 py-0.5 text-xs font-extrabold rounded-full ${
+                            isWeighingStage ? 'bg-brand-primary text-white shadow-2xs' : 'bg-emerald-100 text-emerald-800'
+                          }`}
+                        >
+                          {isWeighingStage ? '4. Weigh & Collect (Active)' : currentStatus}
                         </span>
                       </div>
                       <p className="text-xs text-brand-text-secondary mt-0.5">
@@ -349,12 +457,10 @@ export default function CollectorMyPickups() {
 
                     <div className="text-right">
                       <span className="text-xs text-brand-text-secondary block font-semibold">
-                        {currentStatus === 'Accepted' || currentStatus === 'On the Way'
-                          ? 'Est. Payout (Subject to Scale)'
-                          : 'Final Scale Payout'}
+                        {isWeighingStage ? 'Calculated Scale Payout' : 'Estimated Payout'}
                       </span>
-                      <span className="text-xl font-extrabold text-brand-primary">
-                        ₹{req.estimatedValue}
+                      <span className="text-2xl font-extrabold text-brand-primary">
+                        ₹{cardTotalAmount.toFixed(0)}
                       </span>
                     </div>
                   </div>
@@ -379,7 +485,7 @@ export default function CollectorMyPickups() {
                           key={step.status}
                           className={`py-2 px-1 rounded-xl transition-all ${
                             isCurrent
-                              ? 'bg-brand-primary text-white font-extrabold ring-2 ring-brand-primary/30 shadow-xs'
+                              ? 'bg-brand-primary text-white font-extrabold shadow-2xs scale-102'
                               : isReached
                               ? 'bg-emerald-100 text-emerald-900 font-bold'
                               : 'bg-brand-bg text-brand-text-secondary'
@@ -391,34 +497,155 @@ export default function CollectorMyPickups() {
                     })}
                   </div>
 
-                  {/* Information Box based on Current Pickup State */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-brand-bg/60 p-4 rounded-2xl border border-brand-border text-xs">
-                    <div>
-                      <span className="text-brand-text-secondary block font-bold">📍 Pickup Location:</span>
-                      <span className="font-semibold text-brand-text">{req.pickupAddress}</span>
+                  {/* Pickup Information & Items Section */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between text-xs font-bold text-brand-text">
+                      <span>📍 Pickup Location: {req.pickupAddress}</span>
                     </div>
 
-                    <div>
-                      <span className="text-brand-text-secondary block font-bold">
-                        {currentStatus === 'Accepted' || currentStatus === 'On the Way'
-                          ? '📋 Customer Estimated Scrap:'
-                          : '⚖️ Measured Scale Scrap:'}
-                      </span>
-                      <div className="font-semibold text-brand-text mt-0.5 space-y-0.5">
-                        {req.items.map((i) => (
-                          <div key={i.id} className="flex justify-between text-[11px]">
-                            <span>• {i.name} ({i.category})</span>
-                            <span className="font-bold">{i.weightKg} kg (Est ₹{i.amount})</span>
+                    {/* ─── STAGE 4: WEIGH & COLLECT INLINE EDITING (Preserves Status!) ─── */}
+                    {isWeighingStage ? (
+                      <div className="bg-emerald-50/60 border border-brand-primary/30 p-4 rounded-2xl space-y-3">
+                        <div className="flex items-center justify-between border-b border-brand-primary/20 pb-2">
+                          <span className="text-xs font-extrabold text-brand-dark uppercase tracking-wider flex items-center gap-1.5">
+                            <span>⚖️ Doorstep Scale Weighing</span>
+                            <span className="text-[10px] font-normal text-emerald-800">(Editing items preserves status)</span>
+                          </span>
+                          <button
+                            onClick={() => handleInlineAddItem(req.id, req.items)}
+                            className="text-xs font-bold text-brand-primary bg-white px-2.5 py-1 rounded-lg border border-brand-primary/30 hover:bg-brand-light transition cursor-pointer"
+                          >
+                            + Add Item
+                          </button>
+                        </div>
+
+                        {/* Inline Item List for Weighing Stage */}
+                        <div className="space-y-2.5">
+                          {req.items.map((item, index) => (
+                            <div
+                              key={item.id || index}
+                              className="bg-white p-3 rounded-xl border border-brand-border flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 text-xs shadow-2xs"
+                            >
+                              {/* Item Name */}
+                              <div className="flex-1 min-w-0">
+                                <label className="block text-[9px] font-bold text-brand-text-secondary uppercase">Material</label>
+                                <input
+                                  type="text"
+                                  value={item.name}
+                                  onChange={(e) =>
+                                    handleInlineItemChange(req.id, req.items, index, 'name', e.target.value)
+                                  }
+                                  className="w-full font-bold text-brand-text bg-transparent border-b border-brand-border focus:border-brand-primary focus:outline-none py-0.5"
+                                />
+                              </div>
+
+                              {/* Category */}
+                              <div className="w-28">
+                                <label className="block text-[9px] font-bold text-brand-text-secondary uppercase">Category</label>
+                                <select
+                                  value={item.category}
+                                  onChange={(e) =>
+                                    handleInlineItemChange(req.id, req.items, index, 'category', e.target.value)
+                                  }
+                                  className="w-full font-semibold text-brand-text bg-brand-bg rounded-lg p-1 border border-brand-border focus:outline-none"
+                                >
+                                  <option value="Paper">Paper</option>
+                                  <option value="Plastic">Plastic</option>
+                                  <option value="Metal">Metal</option>
+                                  <option value="E-waste">E-waste</option>
+                                  <option value="Rubber">Rubber</option>
+                                  <option value="Other">Other</option>
+                                </select>
+                              </div>
+
+                              {/* Scale Weight */}
+                              <div className="w-28">
+                                <label className="block text-[9px] font-bold text-brand-text-secondary uppercase">Scale Weight (kg)</label>
+                                <div className="relative">
+                                  <input
+                                    type="number"
+                                    step="0.5"
+                                    min="0.5"
+                                    value={item.weightKg}
+                                    onChange={(e) =>
+                                      handleInlineItemChange(req.id, req.items, index, 'weightKg', e.target.value)
+                                    }
+                                    className="w-full font-extrabold text-brand-primary bg-brand-light/30 border border-brand-primary rounded-lg p-1 text-right focus:outline-none"
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Rate */}
+                              <div className="w-20">
+                                <label className="block text-[9px] font-bold text-brand-text-secondary uppercase">Rate (₹/kg)</label>
+                                <input
+                                  type="number"
+                                  value={item.pricePerKg}
+                                  onChange={(e) =>
+                                    handleInlineItemChange(req.id, req.items, index, 'pricePerKg', e.target.value)
+                                  }
+                                  className="w-full font-bold text-brand-text bg-brand-bg border border-brand-border rounded-lg p-1 text-right focus:outline-none"
+                                />
+                              </div>
+
+                              {/* Subtotal */}
+                              <div className="text-right min-w-[75px]">
+                                <span className="text-[9px] text-brand-text-secondary block font-bold">Subtotal</span>
+                                <span className="font-extrabold text-brand-text text-sm">₹{(item.weightKg * item.pricePerKg).toFixed(0)}</span>
+                              </div>
+
+                              {/* Delete Button */}
+                              {req.items.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleInlineDeleteItem(req.id, req.items, index)}
+                                  className="text-red-500 hover:text-red-700 text-xs font-bold px-1.5 py-1 rounded-lg hover:bg-red-50 transition cursor-pointer self-center"
+                                  title="Delete Item"
+                                >
+                                  🗑️ Delete
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Itemized Formula Breakdown Display as requested */}
+                        <div className="bg-white p-3 rounded-xl border border-brand-border space-y-1 text-xs font-mono">
+                          <div className="font-bold text-brand-text text-[11px] border-b pb-1 font-sans">
+                            Itemized Formula Breakdown:
                           </div>
-                        ))}
+                          {req.items.map((item, idx) => (
+                            <div key={idx} className="flex justify-between">
+                              <span>{item.name}: {item.weightKg} kg × ₹{item.pricePerKg}</span>
+                              <span className="font-bold text-brand-text">₹{(item.weightKg * item.pricePerKg).toFixed(0)}</span>
+                            </div>
+                          ))}
+                          <div className="flex justify-between font-bold font-sans text-sm pt-1.5 border-t border-brand-border text-brand-primary">
+                            <span>Total Scale Payout:</span>
+                            <span>₹{cardTotalAmount.toFixed(0)}</span>
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      /* Non-Weighing Stage Summary Display */
+                      <div className="bg-brand-bg/60 p-3.5 rounded-2xl border border-brand-border text-xs space-y-1">
+                        <span className="text-brand-text-secondary block font-bold">📋 Customer Estimated Scrap Items:</span>
+                        <div className="font-semibold text-brand-text space-y-0.5">
+                          {req.items.map((i) => (
+                            <div key={i.id} className="flex justify-between text-[11px]">
+                              <span>• {i.name} ({i.category})</span>
+                              <span className="font-bold">{i.weightKg} kg (Est ₹{i.amount})</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Status Banner Messages */}
+                  {/* Status Banner Guidance */}
                   {(currentStatus === 'Accepted' || currentStatus === 'Collector Confirmed') && (
                     <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-900 font-medium">
-                      ℹ️ Order accepted. Review customer address above and start pickup when traveling. Scale weighing is unlocked after arrival.
+                      ℹ️ Order accepted. Review customer address above and start pickup when traveling. Scale weighing unlocks after arrival.
                     </div>
                   )}
 
@@ -432,12 +659,12 @@ export default function CollectorMyPickups() {
                   {currentStatus === 'Arrived' && (
                     <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-900 font-medium flex items-center gap-2">
                       <span className="text-base">📍</span>
-                      <span>Arrived at customer address! Click "Start Weighing" to inspect scrap and enter physical scale weights.</span>
+                      <span>Arrived at doorstep! Click "Start Weighing" to inspect scrap and enter physical scale weights.</span>
                     </div>
                   )}
 
                   {/* Action Buttons strictly matched to current state */}
-                  <div className="flex flex-col sm:flex-row items-center justify-end gap-2 pt-1">
+                  <div className="flex flex-col sm:flex-row items-center justify-end gap-2.5 pt-1">
                     
                     {/* 1. Accepted State -> Start Pickup */}
                     {(currentStatus === 'Accepted' || currentStatus === 'Collector Confirmed') && (
@@ -449,33 +676,47 @@ export default function CollectorMyPickups() {
                       </button>
                     )}
 
-                    {/* 2. On the Way State -> Mark Arrived */}
+                    {/* 2. On the Way State -> Share Location & Mark Arrived */}
                     {currentStatus === 'On the Way' && (
-                      <button
-                        onClick={() => handleStatusAdvance(req)}
-                        className="w-full sm:w-auto py-3 px-6 rounded-xl bg-brand-primary text-white font-extrabold text-xs sm:text-sm hover:bg-brand-dark transition shadow-2xs cursor-pointer"
-                      >
-                        📍 Mark Arrived
-                      </button>
+                      <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
+                        <button
+                          type="button"
+                          onClick={() => toggleLocationSharing(req)}
+                          className={`w-full sm:w-auto py-3 px-5 rounded-xl font-bold text-xs transition border cursor-pointer ${
+                            sharingReqId === req.id
+                              ? 'bg-emerald-100 text-emerald-900 border-emerald-400 font-extrabold animate-pulse'
+                              : 'bg-brand-card border-brand-primary text-brand-primary hover:bg-brand-light'
+                          }`}
+                        >
+                          {sharingReqId === req.id ? '🟢 Sharing Live Location...' : '📡 Share Live Location'}
+                        </button>
+
+                        <button
+                          onClick={() => handleStatusAdvance(req)}
+                          className="w-full sm:w-auto py-3 px-6 rounded-xl bg-brand-primary text-white font-extrabold text-xs sm:text-sm hover:bg-brand-dark transition shadow-2xs cursor-pointer"
+                        >
+                          📍 Mark Arrived
+                        </button>
+                      </div>
                     )}
 
                     {/* 3. Arrived State -> Start Weighing */}
                     {currentStatus === 'Arrived' && (
                       <button
-                        onClick={() => handleOpenWeighingModal(req)}
+                        onClick={() => handleStatusAdvance(req)}
                         className="w-full sm:w-auto py-3 px-6 rounded-xl bg-brand-primary text-white font-extrabold text-xs sm:text-sm hover:bg-brand-dark transition shadow-md cursor-pointer"
                       >
                         ⚖️ Start Weighing
                       </button>
                     )}
 
-                    {/* 4. Scrap Collected State -> Complete & Pay */}
-                    {currentStatus === 'Scrap Collected' && (
+                    {/* 4. Weigh & Collect Stage -> Confirm Collection & Payment */}
+                    {isWeighingStage && (
                       <button
-                        onClick={() => handleOpenWeighingModal(req)}
-                        className="w-full sm:w-auto py-3 px-6 rounded-xl bg-emerald-600 text-white font-extrabold text-xs sm:text-sm hover:bg-emerald-700 transition shadow-md cursor-pointer"
+                        onClick={() => handleFinalConfirmPayment(req)}
+                        className="w-full sm:w-auto py-3.5 px-8 rounded-xl bg-emerald-600 text-white font-extrabold text-xs sm:text-sm hover:bg-emerald-700 transition shadow-md cursor-pointer flex items-center justify-center gap-2"
                       >
-                        💰 Confirm Collection & Payment
+                        <span>💰 Confirm Collection & Payment</span>
                       </button>
                     )}
                   </div>
