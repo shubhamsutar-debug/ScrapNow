@@ -166,13 +166,16 @@ export default function AuthModal() {
   const handleVerifiedContinue = () => {
     const existing = isExistingUser(phone);
     if (existing) {
-      login(existing);
+      // If logging in via standard Login/Register button (not collector registration intent), set customer role
+      const userToLogin = authRedirectIntent === 'collector-register'
+        ? existing
+        : { ...existing, role: 'user' as const };
+
+      login(userToLogin);
       closeAuthModal();
       if (authRedirectIntent === 'sell-scrap') {
         navigate('/sell-scrap');
       } else if (authRedirectIntent === 'collector-register') {
-        navigate('/collector/register');
-      } else if (existing.role === 'collector') {
         navigate('/collector/dashboard');
       } else {
         navigate('/dashboard');

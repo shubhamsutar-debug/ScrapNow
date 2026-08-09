@@ -755,6 +755,7 @@ export default function CollectorMyPickups() {
               ))}
             </div>
           </div>
+        )}
         {/* Cancelled by Customer Log */}
         {myCancelledPickups.length > 0 && (
           <div className="bg-brand-card border border-brand-border rounded-3xl p-6 space-y-3 shadow-xs">

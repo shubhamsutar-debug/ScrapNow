@@ -483,13 +483,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const upgradeToCollector = useCallback(
-    (businessName: string, vehicleType: string): User => {
+    (businessName: string, _vehicleType: string): User => {
       if (!user) throw new Error('Must be logged in to upgrade to collector');
+
+      const profile: CollectorProfile = {
+        collectorId: `COL-${Math.floor(1000 + Math.random() * 9000)}`,
+        userId: user.userId,
+        name: user.name,
+        phone: user.phone,
+        businessName,
+        shopAddress: '',
+        city: user.location,
+        pincode: '',
+        acceptedCategories: ['Paper', 'Plastic', 'Metal'],
+        pickupAvailable: true,
+        pickupRadiusKm: 10,
+        workingDays: 'Mon - Sat',
+        workingHours: '9:00 AM - 7:00 PM',
+        minPickupKg: 5,
+        createdAt: new Date().toISOString(),
+      };
+
       const updatedUser: User = {
         ...user,
         role: 'collector',
         businessName,
-        vehicleType,
+        collectorProfile: profile,
       };
       setUser(updatedUser);
       const all = loadAllUsers().map((u) => (u.phone === user.phone ? updatedUser : u));
